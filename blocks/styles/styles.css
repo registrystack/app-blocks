@@ -1,0 +1,1693 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/* The Registry Stack website's typefaces, bundled with the app so they load
+   under the host's same-origin font policy. */
+@import "@fontsource-variable/public-sans";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/600.css";
+@source "../../licence-nursing/src/**/*.{ts,tsx}";
+@source "../../apps/*/src/**/*.{ts,tsx}";
+@source "../**/*.{ts,tsx}";
+@source not "../test";
+@import "./work-shell.styles.css";
+@import "./casework-items-table.css";
+@import "./casework-inbox.styles.css";
+@import "./casework-item.styles.css";
+@import "./casework-team.css";
+@import "./document-preview.styles.css";
+
+/* Square corners everywhere, as on the Registry Stack website: every
+   rounded-* utility and every component built on them draws a hard edge. */
+@theme {
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-3xl: 0;
+  --radius-4xl: 0;
+}
+
+/* Identifiers (item references and support references) are set in mono, so
+   a reference read out or copied matches character for character. */
+@theme {
+  --font-mono:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@theme inline {
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+}
+
+:root {
+  /* The shadcn token set. Every copied component reads these names. */
+  --background: #fff;
+  --foreground: #161616;
+  --card: #fff;
+  --card-foreground: #161616;
+  --popover: #fff;
+  --popover-foreground: #161616;
+  --primary: #155e4c;
+  --primary-dark: #104737;
+  --primary-foreground: #fff;
+  --secondary: #e8f0eb;
+  --secondary-foreground: #161616;
+  --muted: #eef2ec;
+  --muted-foreground: #586259;
+  --accent: #edf3ee;
+  --accent-foreground: #161616;
+  --destructive: #a32d29;
+  --border: #ced7d1;
+  --input: #89958b;
+  --ring: #168268;
+  --radius: 0;
+
+  /* The staff work shell's frame. */
+  --header-height: 48px;
+  --sidebar-width: 220px;
+
+  /* The website's ledger paper, with the app's green retained as its ink. */
+  --paper: #eef2ec;
+  --canvas: #f8f9f6;
+  --panel: #eef2ec;
+  --panel-active: #e9f0e8;
+  --panel-hover: #edf2ed;
+  --row-hover: #f2f5ef;
+  --scope: #eef4e9;
+  --icon-surface: #f2f7ef;
+  --table-head: #eef2ec;
+  --comparison-current: #f7f7f2;
+  --comparison-proposed: #edf5eb;
+  --changed: #eef6ee;
+
+  /* Borders finer or heavier than the default one. */
+  --border-subtle: #e3e9e2;
+  --border-definition: #e4e9e2;
+  --border-chip: #d6e0d4;
+  --border-icon: #d6e1d4;
+  --border-scope: #e0e7dc;
+  --border-beta: #c9d8cf;
+  --border-hover: #668c72;
+  --elevation-tint: #19262408;
+
+  /* Text tones, from the strongest to the faintest. */
+  --nav-active-foreground: #1b5541;
+  --icon-foreground: #567450;
+  --beta-foreground: #526458;
+  --nav-foreground: #53645a;
+  --eyebrow-foreground: #5a6d60;
+  --footer-foreground: #5e6b5f;
+  --table-head-foreground: #414d43;
+  /* 4.8:1 on the card: the example is the palest text the setup form uses
+     and still has to be read, so it sits above the AA floor, not on it. */
+  --example-foreground: #66766b;
+  --empty-foreground: #80957e;
+
+  /* Links and the green accents that mark an active or changed thing. */
+  --link: #205c43;
+  --link-record: #1b5b44;
+  --accent-strong: #69987b;
+  --changed-accent: #2c8365;
+  --chip: #eef3eb;
+  --chip-hover: #dce8dc;
+  --chip-foreground: #3d5b39;
+  --filter-foreground: #33523f;
+
+  /* Status families: a surface, a border and a text tone for each. */
+  --success: #e6f2ed;
+  --success-border: #c0dbce;
+  --success-foreground: #1e654e;
+  --warning: #fff5df;
+  --warning-border: #e7d9b7;
+  --warning-foreground: #76541b;
+  --draft: #f5eeee;
+  --draft-border: #e0cece;
+  --draft-foreground: #7b4444;
+  --expired: #f1f3f0;
+  --expired-border: #d8ded4;
+  --expired-foreground: #4c5a51;
+  --destructive-strong: #9b2d26;
+
+  /* Notice callouts, which carry a heavier inline-start rule. */
+  --notice: #edf4ee;
+  --notice-border: #c9d8ce;
+  --notice-warning: #fff9e9;
+  --notice-warning-border: #d3b572;
+  --notice-warning-accent: #947124;
+  --notice-success: #e8f6ed;
+  --notice-success-border: #90b99e;
+
+  font-family:
+    "Public Sans Variable",
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: var(--foreground);
+  background: var(--canvas);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  /* Control heights read by the button and input components. These keep
+     a 44px tap target; the officer shell sets denser ones for a mouse
+     (work-shell.css). */
+  --control-h-xs: 2.75rem;
+  --control-h-sm: 2.75rem;
+  --control-h: 2.75rem;
+  --control-h-lg: 3rem;
+}
+@layer base {
+  /* Tailwind's own default border colour is currentColor; shadcn's
+     components expect the theme's border tone, as its stock base sets. */
+  * {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+  body {
+    margin: 0;
+  }
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+/* The application's own rules sit in the components layer: above the
+   base resets, below Tailwind utilities, so a utility on a component
+   always wins over a rule here. Kept unindented so history stays
+   readable; the layer closes at the end of this file. */
+@layer components {
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+button:not(:disabled),
+select {
+  cursor: pointer;
+}
+a:focus-visible,
+button:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+}
+h1,
+h2,
+h3,
+p {
+  margin-block-start: 0;
+}
+h1,
+h2,
+h3 {
+  letter-spacing: -0.01em;
+}
+h1 {
+  font-size: clamp(1.85rem, 3.5vw, 2.65rem);
+  font-weight: 700;
+  line-height: 1.13;
+  margin-block-end: 1rem;
+  max-width: 22ch;
+}
+h1:focus {
+  outline: none;
+}
+h2 {
+  font-size: 1.15rem;
+  font-weight: 620;
+  line-height: 1.45;
+  margin-block-end: 1.2rem;
+}
+h3 {
+  font-size: 1rem;
+  font-weight: 650;
+}
+p {
+  line-height: 1.65;
+  margin-block-end: 1rem;
+}
+fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-block-end: 0.5rem;
+}
+svg {
+  flex-shrink: 0;
+}
+main {
+  min-width: 0;
+}
+main:focus {
+  outline: none;
+}
+.muted {
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+}
+.eyebrow {
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  color: var(--eyebrow-foreground);
+  margin-block-end: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.lead {
+  color: var(--muted-foreground);
+  font-size: 1rem;
+  max-width: 66ch;
+  margin-block-end: 0;
+}
+.topbar {
+  height: 84px;
+  border-block-end: 2px solid var(--foreground);
+  background: var(--background);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-inline: 2rem;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  font-weight: 650;
+  font-size: 1.05rem;
+  flex-wrap: wrap;
+}
+.beta {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--border-beta);
+  padding: 0.2rem 0.35rem;
+  border-radius: 0;
+  color: var(--beta-foreground);
+}
+.account {
+  display: flex;
+  gap: 1.3rem;
+  align-items: center;
+  font-size: 0.8rem;
+}
+.account div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.account span {
+  font-size: 0.65rem;
+  color: var(--muted-foreground);
+}
+.shell-body {
+  display: grid;
+  grid-template-columns: 244px 1fr;
+  min-height: calc(100vh - 84px);
+}
+.sidebar {
+  background: var(--panel);
+  border-inline-end: 1px solid var(--border);
+  padding: 2rem 1.3rem;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar > .eyebrow {
+  font-size: 0.6rem;
+  line-height: 1.7;
+}
+.sidebar h2 {
+  font-size: 1rem;
+  margin-block-end: 2rem;
+}
+.sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.sidebar nav > a {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.8rem 0.7rem;
+  border-radius: 0;
+  font-size: 0.85rem;
+  color: var(--nav-foreground);
+  min-height: 44px;
+}
+.sidebar nav > a[aria-current="page"] {
+  background: var(--panel-active);
+  color: var(--nav-active-foreground);
+  font-weight: 600;
+}
+.sidebar nav > a:hover {
+  background: var(--panel-hover);
+}
+.nav-arrow {
+  margin-inline-start: auto;
+  opacity: 0.5;
+}
+.shell main {
+  padding: 2.8rem clamp(1.3rem, 4vw, 4.5rem) 0;
+  max-width: 1500px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.shell main > div:not(.notice) {
+  flex: 1;
+}
+.page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-block-end: 2rem;
+}
+.page-heading > [data-slot="button"] {
+  margin-block-start: 0.6rem;
+}
+.page-heading .badge {
+  margin-block-start: 0.8rem;
+}
+.search-form {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+  margin-block-end: 1.5rem;
+  flex-wrap: wrap;
+}
+.search-form > div {
+  min-width: 220px;
+  max-width: 420px;
+  flex: 1;
+}
+.search-form input {
+  background: var(--background);
+}
+.search-form label {
+  font-size: 0.75rem;
+}
+.table-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: white;
+  overflow: auto;
+}
+/* At narrow widths the grid scrolls inside its focusable region instead of
+   squashing: columns keep readable widths (ui-defaults §6, spec §10). */
+.table-wrap table {
+  min-width: 34rem;
+}
+/* The element rules below style the plain tables. A shadcn `Table` marks
+   each part with a `data-slot` and carries its own utilities, so these leave
+   it alone rather than leak padding, weight and colour into it. */
+table:where(:not([data-slot])) {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: start;
+  font-size: 0.875rem;
+}
+th:where(:not([data-slot])) {
+  background: var(--table-head);
+  color: var(--table-head-foreground);
+  font-size: 0.68rem;
+  letter-spacing: 0.035em;
+  font-weight: 650;
+  padding: 1rem 1.25rem;
+  white-space: nowrap;
+  /* Column labels sit over left-aligned data; centre only explicit .num. */
+  text-align: start;
+}
+td:where(:not([data-slot])) {
+  padding: 1.15rem 1.25rem;
+  border-block-start: 1px solid var(--border-subtle);
+  max-width: 260px;
+  overflow-wrap: anywhere;
+}
+/* A row header is data, not a column label: keep body sizing and colour. */
+tbody th:where(:not([data-slot])) {
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  letter-spacing: normal;
+  font-weight: 650;
+  padding: 1.15rem 1.25rem;
+  border-block-start: 1px solid var(--border-subtle);
+  text-align: start;
+  white-space: normal;
+}
+.pager select {
+  width: auto;
+  min-width: 9rem;
+}
+.record-link {
+  color: var(--link-record);
+  font-weight: 650;
+}
+.record-link:hover {
+  text-decoration: underline;
+}
+.icon-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border-chip);
+  background: var(--chip);
+  color: var(--chip-foreground);
+  white-space: normal;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  padding: 0.25rem 0.55rem;
+  border-radius: 0;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+.badge-submitted,
+.badge-revision-requested,
+.badge-changes-requested,
+.badge-approval-expired {
+  background: var(--warning);
+  border-color: var(--warning-border);
+  color: var(--warning-foreground);
+}
+.badge-rejected,
+.badge-cancelled,
+.badge-draft {
+  background: var(--draft);
+  border-color: var(--draft-border);
+  color: var(--draft-foreground);
+}
+.badge-applied,
+.badge-approved {
+  background: var(--success);
+  border-color: var(--success-border);
+  color: var(--success-foreground);
+}
+.badge-recorded-expired {
+  background: var(--expired);
+  border-color: var(--expired-border);
+  color: var(--expired-foreground);
+}
+.pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-block: 1.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.7rem;
+  min-width: 0;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 1.5rem;
+}
+.facts {
+  margin: 0;
+}
+.definition {
+  display: grid;
+  /* The label column is capped so a value stays beside its label on a wide
+     page; below 700px the whole list collapses to one column. */
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+  gap: 1rem;
+  border-block-end: 1px solid var(--border-definition);
+  padding-block: 1rem;
+  font-size: 0.9rem;
+}
+.definition:last-child {
+  border: 0;
+}
+.definition dt {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+}
+.definition dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.scope-card {
+  background: var(--scope);
+}
+.scope-card h2 {
+  font-size: 1.4rem;
+}
+.scope-card .muted {
+  margin-block-start: 2rem;
+  font-size: 0.78rem;
+}
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  margin-block-end: 1.5rem;
+  min-height: 44px;
+  width: fit-content;
+}
+.back-link:hover {
+  text-decoration: underline;
+}
+.notice {
+  border: 1px solid var(--notice-border);
+  border-inline-start: 4px solid var(--accent-strong);
+  background: var(--notice);
+  border-radius: 0;
+  padding: 1.25rem 1.5rem;
+  margin-block-end: 1.5rem;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+.notice h2 {
+  font-size: 1rem;
+  margin-block-end: 0.5rem;
+}
+.notice p:last-child {
+  margin-block-end: 0;
+}
+.notice-warning {
+  border-color: var(--notice-warning-border);
+  border-inline-start-color: var(--notice-warning-accent);
+  background: var(--notice-warning);
+}
+.notice-success {
+  background: var(--notice-success);
+  border-color: var(--notice-success-border);
+}
+.notice .notice {
+  margin-block-start: 1rem;
+}
+.error-panel:focus {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+}
+.reference {
+  font-size: 0.73rem;
+  overflow-wrap: anywhere;
+  color: var(--muted-foreground);
+}
+.loading {
+  padding: 3rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--muted-foreground);
+}
+.loading-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-strong);
+}
+.empty-state {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  text-align: center;
+  padding: 4rem 2rem;
+  background: var(--card);
+}
+.empty-state svg {
+  margin: auto auto 1.2rem;
+  color: var(--empty-foreground);
+}
+.empty-state h2 {
+  margin-block-end: 0.7rem;
+}
+.empty-state p {
+  color: var(--muted-foreground);
+  max-width: 52ch;
+  margin-inline: auto;
+}
+.form-card {
+  max-width: 900px;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1.5rem;
+}
+.field {
+  margin-block-end: 1.6rem;
+}
+.field label {
+  font-size: 0.875rem;
+}
+.field-hint {
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+  margin-block-end: 0.6rem;
+}
+.field-error {
+  border-inline-start: 3px solid var(--destructive);
+  padding-inline-start: 1rem;
+}
+.field-error-message {
+  font-weight: 600;
+  color: var(--destructive-strong);
+  font-size: 0.8rem;
+  margin-block-end: 0.6rem;
+}
+.optional {
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+.error-summary {
+  padding: 1.3rem;
+  border: 3px solid var(--destructive);
+  margin-block-end: 2rem;
+}
+.error-summary h2 {
+  color: var(--destructive-strong);
+  margin-block-end: 0.7rem;
+}
+.error-summary ul {
+  margin: 0;
+  padding-inline-start: 1.2rem;
+}
+.error-summary a {
+  color: var(--destructive-strong);
+  text-decoration: underline;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.task-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 1.5rem;
+}
+/* Shared by the task screens and by the Casework item's action card, so it
+   stays here rather than in the Casework sections at the end of this file. */
+.context-card,
+.action-card {
+  align-self: start;
+}
+.context-card h2 {
+  font-size: 1.15rem;
+}
+.context-card .muted {
+  font-size: 0.75rem;
+  margin-block-start: 1.5rem;
+}
+.comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  overflow: hidden;
+  margin-block-end: 1.5rem;
+}
+.comparison > section {
+  padding: 1.2rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.comparison > section:first-child {
+  background: var(--comparison-current);
+  border-inline-end: 1px solid var(--border);
+}
+.comparison > section:last-child {
+  background: var(--comparison-proposed);
+}
+.comparison p:last-child {
+  margin: 0;
+  font-size: 0.9rem;
+}
+select {
+  display: block;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--background);
+  padding: 0.65rem;
+  width: 100%;
+  font: inherit;
+}
+.record-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-icon);
+  border-radius: 0;
+  background: var(--icon-surface);
+  color: var(--icon-foreground);
+}
+.record-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.3rem;
+}
+.record-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.6rem;
+  display: flex;
+  flex-direction: column;
+}
+.record-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 4px 14px var(--elevation-tint);
+}
+.record-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-block-end: 1.6rem;
+}
+.record-card .eyebrow {
+  margin-block-end: 0.5rem;
+}
+.record-card h2 {
+  font-size: 1.35rem;
+  margin-block-end: 0.5rem;
+}
+.record-card > p:not(.eyebrow) {
+  color: var(--muted-foreground);
+  font-size: 0.85rem;
+}
+.card-link {
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+.text-link {
+  color: var(--link);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+.text-link:hover {
+  text-decoration: underline;
+}
+footer {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  border-block-start: 1px solid var(--border);
+  margin-block-start: 4rem;
+  padding-block: 1.5rem;
+  color: var(--footer-foreground);
+  font-size: 0.65rem;
+}
+.public-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.public-content {
+  width: min(100%, 960px);
+  margin-inline: auto;
+  padding: 3rem 2rem 4rem;
+  flex: 1;
+}
+.public-content h1 {
+  max-width: 26ch;
+  font-size: clamp(1.85rem, 3vw, 2.4rem);
+}
+.public-content > .page-heading,
+.public-content > .notice {
+  max-width: 720px;
+}
+.public-content .page-heading {
+  margin-block-end: 1rem;
+}
+.public-content > p:not(.eyebrow) {
+  max-width: 66ch;
+}
+.service-access {
+  margin-block-start: 2rem;
+  border-block-start: 1px solid var(--border);
+  padding-block-start: 1.5rem;
+  max-width: 720px;
+}
+.service-access p {
+  margin-block-end: 1.1rem;
+}
+.public-footer {
+  width: min(calc(100% - 4rem), 896px);
+  margin: 0 auto;
+  line-height: 1.7;
+  font-size: 0.8rem;
+}
+.public-footer a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.queue-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-block-end: 1.5rem;
+}
+.queue-views [data-slot="button"] {
+  transition: none;
+}
+.prose {
+  max-width: 760px;
+}
+.skip-link {
+  position: absolute;
+  inset-inline-start: 1rem;
+  inset-block-start: -100px;
+  background: var(--background);
+  padding: 1rem;
+  z-index: 50;
+}
+.skip-link:focus {
+  inset-block-start: 1rem;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 1000px) {
+  .shell-body {
+    grid-template-columns: 210px 1fr;
+  }
+  .sidebar {
+    padding: 1.7rem 1rem;
+  }
+  .task-layout {
+    grid-template-columns: 1fr;
+  }
+  .context-card {
+    order: -1;
+  }
+  .context-card .muted {
+    display: none;
+  }
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .shell main {
+    padding: 2rem 1.5rem 0;
+  }
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .record-cards {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 700px) {
+  .topbar {
+    height: auto;
+    min-height: 76px;
+    padding: 1rem;
+    align-items: start;
+    flex-wrap: wrap;
+  }
+  .brand {
+    font-size: 0.95rem;
+  }
+  .account {
+    margin-inline-start: auto;
+    gap: 0.4rem;
+  }
+  .account div {
+    display: none;
+  }
+  .shell-body {
+    display: block;
+  }
+  .sidebar {
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--border);
+    padding: 1rem;
+  }
+  .sidebar > .eyebrow,
+  .sidebar h2 {
+    display: none;
+  }
+  .sidebar nav {
+    flex-direction: row;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .sidebar nav > a {
+    font-size: 0.73rem;
+    flex: 1;
+    justify-content: center;
+    padding: 0.7rem 0.45rem;
+    gap: 0.4rem;
+  }
+  .sidebar nav > a svg {
+    width: 16px;
+  }
+  .nav-arrow {
+    display: none;
+  }
+  .shell main {
+    padding: 1.6rem 1rem 0;
+  }
+  .page-heading {
+    flex-direction: column;
+    gap: 1rem;
+    margin-block-end: 1.5rem;
+  }
+  .page-heading h1 {
+    font-size: 2rem;
+  }
+  .page-heading .badge {
+    margin: 0;
+  }
+  .card {
+    padding: 1.25rem;
+  }
+  .definition {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+  .comparison {
+    grid-template-columns: 1fr;
+  }
+  .comparison > section:first-child {
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--border);
+  }
+  .pager {
+    align-items: start;
+    flex-direction: column;
+  }
+  .pager .actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .public-content {
+    padding: 2rem 1rem 3rem;
+  }
+  .public-content h1 {
+    font-size: 2rem;
+  }
+  .public-footer {
+    width: calc(100% - 2rem);
+  }
+  .public-page .topbar > .text-link {
+    font-size: 0.75rem;
+  }
+  .notice {
+    padding: 1rem;
+  }
+  .search-form > div {
+    min-width: 100%;
+  }
+  footer {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .shell-service .record-card {
+    padding: 1.25rem;
+  }
+  .back-link {
+    margin-block-end: 1rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+.current-licence-summary {
+  border-block-end: 1px solid var(--border);
+  padding-block-end: 1rem;
+  margin-block-end: 1.5rem;
+  overflow-wrap: anywhere;
+}
+.current-licence-summary p {
+  margin-block-end: 0.4rem;
+}
+
+.choice-field {
+  min-width: 0;
+}
+.choice-field legend,
+.field-label {
+  font-weight: 650;
+  margin-bottom: 0.5rem;
+}
+.checkbox-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-height: 44px;
+  padding: 0.6rem 0;
+  cursor: pointer;
+}
+.checkbox-option input {
+  flex: 0 0 auto;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.15rem;
+  accent-color: var(--primary);
+}
+.checkbox-option input:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+.value-list {
+  padding-left: 1.25rem;
+  list-style: disc;
+  margin: 0.5rem 0 1rem;
+}
+.value-list li {
+  margin-bottom: 0.25rem;
+}
+.value-object {
+  margin: 0.5rem 0 1rem;
+}
+.value-object dt {
+  font-weight: 650;
+}
+.value-object dd {
+  margin: 0 0 0.5rem;
+}
+.comparison h3 {
+  font-size: 0.9rem;
+  margin: 1rem 0 0.5rem;
+}
+
+/* Queue filters: a form row of label + select + button, then removable chips. */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+  margin-block-end: 1.25rem;
+}
+.filter-bar > div {
+  min-width: 200px;
+  max-width: 340px;
+}
+.filter-bar label {
+  font-size: 0.75rem;
+}
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--chip);
+  border: 1px solid var(--border-chip);
+  border-radius: 0;
+  padding: 0.15rem 0.2rem 0.15rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--filter-foreground);
+}
+.filter-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.filter-chip button:hover {
+  background: var(--chip-hover);
+}
+.filter-chip button:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+.clear-filters-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  color: var(--link);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: underline;
+}
+.clear-filters-link:hover {
+  color: var(--primary);
+}
+.result-count {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  margin-block-end: 1rem;
+}
+
+/* Queue table density and alignment. Dense padding keeps every interactive
+   target at or above 24 by 24 CSS pixels through the row link's own height. */
+.table-dense th,
+.table-dense td {
+  padding: 0.55rem 0.75rem;
+}
+th.num,
+td.num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.table-wrap[tabindex="0"]:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+}
+.row-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  color: var(--link-record);
+  font-weight: 650;
+}
+.row-link:hover {
+  text-decoration: underline;
+}
+
+/* Review screen: three-column comparison with a changed marker that is a
+   word plus colour, never colour alone. */
+.change-table {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  margin-block-end: 1.5rem;
+}
+.change-table th,
+.change-table td {
+  vertical-align: top;
+}
+.change-table th:first-child,
+.change-table td:first-child {
+  width: 20%;
+}
+.change-table .changed-cell {
+  background: var(--changed);
+  border-inline-start: 4px solid var(--changed-accent);
+}
+.change-table .changed-marker {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--success-foreground);
+  background: var(--success);
+  border: 1px solid var(--success-border);
+  border-radius: 0;
+  padding: 0.08rem 0.35rem;
+  margin-block-start: 0.4rem;
+  white-space: nowrap;
+}
+.change-comparison { container-type: inline-size; }
+/* The comparison's controls stand clear of the table above and of the next
+   section's heading, which carries no top margin of its own. */
+.change-comparison > .actions { margin-block: 1.2rem 2rem; }
+.revision-next-step {
+  border-inline-start: 4px solid var(--primary);
+  padding: 1rem 1.25rem;
+  background: var(--paper);
+}
+/* A reviewer's note keeps the line breaks they wrote. */
+.revision-note { white-space: pre-wrap; }
+.change-answer { display: block; padding-inline: 0; text-decoration: underline; color: var(--primary); text-align: start; }
+/* Evidence narrows the reading column even on a large monitor. Put the field
+   name above its two values before labels start breaking into single letters. */
+@container (max-width: 42rem) {
+  /* Keep column associations available to assistive technology when the
+     visual labels move into each value cell. */
+  .change-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .change-table, .change-table tbody { display: block; width: 100%; }
+  .change-table tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .change-table td { display: block; width: auto; border: 0; }
+  .change-table td:first-child { grid-column: 1 / -1; width: auto; font-weight: 600; }
+  .change-table .changed-marker { margin: 0 0 0 0.75rem; }
+  .change-table tr + tr { border-block-start: 1px solid var(--border); }
+  .change-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-block-end: 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 650;
+    color: var(--table-head-foreground);
+  }
+}
+@container (max-width: 25rem) {
+  .change-table tr { grid-template-columns: minmax(0, 1fr); }
+}
+.muted-row td,
+.muted-row td .record-link {
+  color: var(--muted-foreground);
+}
+/* At phone widths the comparison stacks to one field per block, each side
+   named by its data-label, and the changed marker stays with the field
+   (spec §10: reflow never loses the marker). */
+@media (max-width: 30rem) {
+  .change-table,
+  .change-table tbody,
+  .change-table tr,
+  .change-table td {
+    display: block;
+    width: 100%;
+  }
+  .change-table tr {
+    border-block-start: 1px solid var(--border);
+  }
+  .change-table td {
+    border: 0;
+    padding-block-start: 0.35rem;
+  }
+  /* The comparison stacks to one field per block at this width, but the rule
+     that holds the field column to a fifth of the table is more specific than
+     the stacked block and would break a field name a character at a time.
+     Here the stacked name takes the row it is given. */
+  .change-table td:first-child {
+    width: 100%;
+  }
+  .change-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.68rem;
+    letter-spacing: 0.035em;
+    font-weight: 650;
+    color: var(--table-head-foreground);
+  }
+}
+
+/* Review screen: choice and confirmation. */
+.decision-radios {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-block-end: 1.6rem;
+}
+.decision-radios label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--card);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.decision-radios label:hover {
+  border-color: var(--border-hover);
+}
+.decision-radios input {
+  flex: 0 0 auto;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-block-start: 0.15rem;
+  accent-color: var(--primary);
+}
+.decision-radios input:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+.decision-radios .radio-hint {
+  display: block;
+  margin-block-start: 0.2rem;
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+}
+.decision-confirm {
+  border: 1px solid var(--notice-border);
+  border-inline-start: 4px solid var(--accent-strong);
+  background: var(--notice);
+  border-radius: 0;
+  padding: 1.25rem 1.5rem;
+  margin-block-end: 1.5rem;
+}
+.decision-confirm h2,
+.decision-confirm h3 {
+  font-size: 1rem;
+  margin-block-end: 0.6rem;
+}
+
+/* Casework: shared. The work-item list every Casework screen renders rows
+   into, and the due-date block beside each of them. */
+.casework-when {
+  white-space: nowrap;
+}
+.casework-when-late {
+  color: var(--destructive);
+  font-weight: 500;
+}
+.casework-when-today {
+  color: var(--warning-foreground);
+  font-weight: 500;
+}
+.request-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  overflow: hidden;
+}
+.request-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto 18px;
+  gap: 1rem;
+  padding: 1.4rem;
+  align-items: center;
+  border-block-end: 1px solid var(--border);
+}
+.request-row:last-child {
+  border: 0;
+}
+.request-row:hover {
+  background: var(--row-hover);
+}
+.request-row h2 {
+  font-size: 1rem;
+  margin-block-end: 0.4rem;
+}
+.request-row .eyebrow {
+  margin-block-end: 0.35rem;
+}
+.request-row .muted {
+  margin: 0;
+  font-size: 0.8rem;
+}
+.casework-due {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.casework-due p {
+  margin: 0;
+}
+@media (max-width: 700px) {
+  .request-row {
+    grid-template-columns: 1fr auto;
+    padding: 1rem;
+  }
+  .request-row > .record-icon,
+  .request-row > svg {
+    display: none;
+  }
+  .request-row > div {
+    grid-column: 1/-1;
+  }
+  .request-row > .badge {
+    grid-row: 2;
+  }
+}
+
+/* Casework: inbox. The list itself is the shared queue table; these rules
+   cover only what that table has no place for: the width six columns of
+   dates, names and stages need, the next-item control with the reason it
+   cannot be used, and the ways on from an empty inbox. */
+.casework-next {
+  display: flex;
+  flex-direction: column;
+  align-items: end;
+  gap: 0.4rem;
+}
+.casework-next p {
+  margin: 0;
+  max-width: 20rem;
+  font-size: 0.8rem;
+  text-align: end;
+}
+.casework-empty-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+@media (max-width: 700px) {
+  .casework-next {
+    align-items: start;
+  }
+  .casework-next p {
+    text-align: start;
+  }
+}
+
+/* Casework: item. The one-item screen is a single column read top to bottom
+   at every width: the state, the heading, why the officer has it, what is
+   proposed, what has happened, their notes and the decision. There is no
+   second column here, so the rules are measure, spacing, and the disclosure
+   that keeps support references out of the reading line. */
+.casework-item {
+  max-width: 52rem;
+}
+.casework-item > section,
+.casework-item > .casework-decide {
+  margin-block-end: 2.25rem;
+}
+.casework-item blockquote {
+  border-inline-start: 3px solid var(--border);
+  margin: 0.6rem 0 1.2rem;
+  padding-inline-start: 1rem;
+}
+.casework-item blockquote p {
+  margin: 0;
+}
+.casework-policy {
+  font-size: 0.78rem;
+}
+/* A colleague is read as a name, or as the sentence naming them; the account
+   under it is there to be traced, and it is printed only when the name is not
+   already the account. */
+.casework-person {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.casework-person-subject {
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+}
+.flagged-fields {
+  list-style: disc;
+  margin-block: 0.4rem 1.2rem;
+  padding-inline-start: 1.25rem;
+}
+.casework-hold {
+  margin-block-end: 0.5rem;
+}
+.notes-status {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  margin-block-start: 0.6rem;
+  min-height: 2.25rem;
+}
+.notes-status p {
+  margin: 0;
+}
+.history-list details {
+  margin-block-start: 0.4rem;
+}
+.history-list summary {
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.casework-support {
+  border-block-start: 1px solid var(--border);
+  color: var(--muted-foreground);
+  margin-block-start: 2.5rem;
+  padding-block-start: 1rem;
+}
+/* The decision form owns its check step, so a control beside it can only be
+   suppressed from here: while the check step is on screen, one Confirm is the
+   only action offered. */
+.casework-decide:has(.decision-confirm) ~ .casework-release {
+  display: none;
+}
+.confirmation-context {
+  border-block: 1px solid var(--border);
+  margin-block: 1rem 1.5rem;
+  padding-block: 0.35rem;
+}
+.confirmation-context > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.8fr) minmax(0, 1.6fr);
+  gap: 1rem;
+  padding-block: 0.65rem;
+}
+.confirmation-context dt {
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+}
+.confirmation-context dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.history-list {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+}
+.history-list li {
+  border-block-end: 1px solid var(--border);
+  padding-block: 1rem;
+}
+.history-list li:last-child {
+  border-block-end: 0;
+}
+.history-list li > p {
+  margin-block-end: 0.5rem;
+}
+.history-list time,
+.history-list .reference {
+  display: block;
+  margin-block-start: 0.35rem;
+}
+@media (max-width: 700px) {
+  .casework-decide .actions,
+  .casework-release {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+/* Casework: setup. The bootstrap form uses the shared form card; only the
+   example line under each hint, the team list above the form and the staff
+   list on the check page need rules. */
+.setup-teams {
+  margin-block-end: 2rem;
+}
+/* A hint is read once per field, so it keeps a reading measure rather than
+   the card's full width. */
+.setup-form .field-hint {
+  max-width: 66ch;
+}
+.setup-example {
+  margin-block-start: -0.35rem;
+  color: var(--example-foreground);
+}
+.setup-check {
+  max-width: 760px;
+}
+/* The staff identifiers are values in a summary row, so they line up with the
+   other values instead of sitting behind a bullet. */
+.setup-staff {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.setup-staff li {
+  overflow-wrap: anywhere;
+}
+
+/* Casework: staffing. The assignment form on the item page and the staffing
+   dialogs on the Team page. The shared form and notice rules do most of the
+   work, so these cover only what is theirs: the assignment section's rhythm,
+   the sentence a bounded list needs, the per-item movement results, and where
+   focus lands once Casework has answered. */
+/* The assignment form is a section of the item page, so it keeps that page's
+   rhythm wherever the item column places it. */
+.staffing-assignment {
+  margin-block: 2.25rem;
+}
+/* What Casework says about a list it stopped early, read with the field or the
+   preview it belongs to rather than as a page-level notice. */
+.staffing-status {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  margin: 0.4rem 0 0;
+}
+/* Movement results are a list of per-item answers, several of which are
+   refusals, so the panel stays neutral and is never coloured as a success. */
+.staffing-results ul {
+  padding-left: 1.25rem;
+  list-style: disc;
+  margin: 0.5rem 0 0;
+}
+/* Focus lands on the answer once a write settles, so the answer says it has
+   focus rather than taking it silently. */
+.staffing-outcome:focus-visible,
+.staffing-results:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+} /* @layer components */

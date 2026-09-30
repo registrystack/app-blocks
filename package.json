@@ -1,0 +1,15 @@
+{
+  "name": "app-blocks",
+  "private": true,
+  "packageManager": "pnpm@10.34.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "pnpm --filter @registrystack/app-runtime run build",
+    "build:registry": "pnpm --filter @registrystack/app-blocks run build:registry"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "typescript": "7.0.2"
+  }
+}

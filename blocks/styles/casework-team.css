@@ -1,0 +1,19 @@
+/* Casework: the team board: people and items tables, and the staffing dialogs. */
+.team-summary {
+  padding: 0.75rem 1rem;
+  border-inline-start: 3px solid var(--primary);
+  background: var(--paper);
+}
+.team-section-description {
+  max-width: 42rem;
+  margin: 0 0 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+.team-people {
+  border-block-start: 2px solid var(--primary);
+}
+/* The named region owns scrolling, just as it does for work items. */
+.team-people [data-slot="table-container"] {
+  overflow: visible;
+}

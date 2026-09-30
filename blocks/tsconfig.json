@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@/components/ui": ["./ui"],
+      "@/components/ui/*": ["./ui/*"],
+      "@/blocks": ["."],
+      "@/blocks/*": ["./*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", "test"]
+}

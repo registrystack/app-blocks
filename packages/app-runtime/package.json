@@ -1,0 +1,43 @@
+{
+  "name": "@registrystack/app-runtime",
+  "version": "0.37.0-next.0",
+  "description": "Typed browser client and React hooks for Registry Stack App Kit apps: talks to the app host, tracks sessions and pending writes, and backs the app blocks.",
+  "license": "Apache-2.0",
+  "homepage": "https://ui.registrystack.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/registrystack/app-blocks.git",
+    "directory": "packages/app-runtime"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "react": "^19.2.0",
+    "@tanstack/react-query": "^5.102.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "tag": "next"
+  }
+}

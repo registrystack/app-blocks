@@ -1,0 +1,72 @@
+/* Casework: the officer's inbox: view tabs, the queue chip and the footer. */
+
+.casework-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0 0 1rem;
+  border-block-end: 1px solid var(--border);
+  padding-block-end: 0.5rem;
+}
+
+.casework-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+.casework-footer .result-count,
+.casework-footer .pager {
+  margin: 0;
+}
+
+/* At a narrow width the views wrap onto a second line rather than scroll:
+   a view pushed past the edge of a scrolling row is one the officer never
+   sees. The list drops its fixed height so the second line has room. */
+.casework-toolbar [data-slot="tabs"] {
+  min-width: 0;
+  max-width: 100%;
+}
+.casework-toolbar [data-slot="tabs-list"] {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  height: auto;
+  max-width: 100%;
+  padding: 0;
+  gap: 0.25rem;
+}
+.casework-toolbar [data-slot="tabs-trigger"] {
+  min-height: 38px;
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+}
+.casework-toolbar [data-slot="tabs-trigger"][data-active] {
+  color: var(--primary);
+  background: var(--secondary);
+}
+.casework-toolbar [data-slot="tabs-trigger"]::after {
+  bottom: 0;
+  height: 3px;
+  background: var(--primary);
+}
+@media (pointer: coarse) {
+  .casework-toolbar [data-slot="tabs-trigger"] {
+    min-height: 44px;
+  }
+}
+
+/* When the empty inbox was loaded, and the way to load it again. */
+.casework-empty-refresh {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+.casework-empty-refresh p {
+  margin: 0;
+}

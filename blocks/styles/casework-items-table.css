@@ -1,0 +1,48 @@
+/* Casework: the work-item table the inbox and the team board share. */
+.casework-items {
+  border-block-start: 2px solid var(--primary);
+}
+
+/* The shared `Table` component wraps its `<table>` in a scrolling
+   `[data-slot="table-container"]` div. Nested inside the focusable, named
+   `.table-wrap` region, that inner div would do the scrolling while the
+   region never overflows, so its overflow is turned off and `.table-wrap`
+   (`overflow: auto` in styles.css) stays the one scrolling region. */
+.casework-items [data-slot="table-container"] {
+  overflow: visible;
+}
+
+/* More columns than the 34rem floor every queue table shares can hold, so
+   below this width the region scrolls sideways instead of squashing (spec
+   §10), and a stage badge or reference keeps to one line rather than
+   breaking into a column of single letters. */
+.casework-items table {
+  min-width: 56rem;
+}
+.casework-items .badge,
+.casework-items tbody th .row-link {
+  white-space: nowrap;
+}
+
+/* The row whose reference has focus, which is where j and k leave it: a
+   tint across the row and a bar at its start, beside the link's own ring. */
+.casework-items table tbody tr:focus-within {
+  background: var(--accent);
+}
+.casework-items table tbody tr:focus-within > :first-child {
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+/* The small marker beside a task that came back with a note. */
+.casework-returned {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--warning-foreground);
+  background: var(--warning);
+  vertical-align: middle;
+  white-space: nowrap;
+}

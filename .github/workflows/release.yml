@@ -1,0 +1,205 @@
+# Publishes one release of this repository when a tag v<version> is pushed:
+# @registrystack/app-runtime to npm, with a provenance statement, through
+# trusted publishing, and the shadcn blocks registry to GitHub Pages at
+# https://ui.registrystack.org. The tag and the tree come from the release
+# workflow of the private development repository, which runs its gates first.
+# npm trusts this file by name (release.yml) and the environment npm.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions: {}
+
+# An explicit bash runs every step with -eo pipefail; the implicit default
+# runs bash -e only, so a failing command early in a pipe would pass.
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  RUNTIME_DIR: packages/app-runtime
+
+jobs:
+  build:
+    name: Build the runtime and the blocks registry
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: package.json
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the runtime
+        run: pnpm --filter @registrystack/app-runtime run build
+
+      - name: Check the tag names the runtime version
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(jq -r .version "$RUNTIME_DIR/package.json")"
+          if [[ "$TAG" != "v$version" ]]; then
+            echo "::error::tag $TAG does not name the runtime version; $RUNTIME_DIR/package.json says v$version"
+            exit 1
+          fi
+          if ! [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.[0-9]+ ]]; then
+            echo "::error::$version is not a semantic version"
+            exit 1
+          fi
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "minor=${BASH_REMATCH[1]}.${BASH_REMATCH[2]}" >>"$GITHUB_OUTPUT"
+
+      # npm pack fixes every file's timestamp, so a rerun packs the same bytes
+      # and the publish job can tell a version it already published.
+      - name: Pack the runtime
+        id: pack
+        working-directory: ${{ env.RUNTIME_DIR }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          out="$RUNNER_TEMP/runtime"
+          mkdir -p "$out"
+          npm pack --pack-destination "$out"
+          tarball="$out/registrystack-app-runtime-$VERSION.tgz"
+          unexpected="$(tar -tzf "$tarball" | grep -vE '^package/(LICENSE|package\.json|dist/.+)$' || true)"
+          if [[ -n "$unexpected" ]]; then
+            echo "::error::the runtime tarball carries files besides LICENSE, package.json and dist/: $unexpected"
+            exit 1
+          fi
+          echo "tarball=$tarball" >>"$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: app-runtime-tarball
+          path: ${{ steps.pack.outputs.tarball }}
+          if-no-files-found: error
+
+      - name: Build the blocks registry
+        working-directory: blocks
+        run: pnpm run build:registry
+
+      # Pages serves one deployment at a time: r/<minor>/ holds this release,
+      # and r/latest/ the same files.
+      - name: Lay out r/${{ steps.version.outputs.minor }}/ and r/latest/
+        env:
+          MINOR: ${{ steps.version.outputs.minor }}
+        run: |
+          for dir in "site/r/$MINOR" site/r/latest; do
+            mkdir -p "$dir"
+            cp -R blocks/registry-dist/. "$dir/"
+            if [[ ! -f "$dir/registry.json" ]]; then
+              echo "::error::$dir has no registry.json index"
+              exit 1
+            fi
+          done
+          echo "$(find site -type f | wc -l) files under site/"
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/
+
+  publish:
+    name: Publish @registrystack/app-runtime to npm
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # The environment's reviewers approve each publish; npm trusts only this
+    # workflow file in this environment.
+    environment: npm
+    # Trusted publishing: npm exchanges this job's OIDC token for a one-time
+    # publish credential, so the repository holds no npm token.
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Check npm supports trusted publishing
+        run: |
+          npm_version="$(npm --version)"
+          if ! printf '11.5.1\n%s\n' "$npm_version" | sort --version-sort --check=quiet; then
+            echo "::error::npm $npm_version is older than 11.5.1, the first release with trusted publishing"
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: app-runtime-tarball
+          path: ${{ runner.temp }}/runtime
+
+      # Publishes the tarball the build job packed, so no dependency code runs
+      # in the one job that can publish. A rerun finds the version already on
+      # npm: the same bytes pass, other bytes fail.
+      - name: Publish under the next tag, unless npm already has these bytes
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          tarball="$RUNNER_TEMP/runtime/registrystack-app-runtime-$VERSION.tgz"
+          packed="$(tar -xzOf "$tarball" package/package.json | jq -r .version)"
+          if [[ "$packed" != "$VERSION" ]]; then
+            echo "::error::the tarball holds $packed, not $VERSION"
+            exit 1
+          fi
+          integrity="sha512-$(openssl dgst -sha512 -binary "$tarball" | base64 -w0)"
+          metadata="$RUNNER_TEMP/published.json"
+          status="$(curl -sS --retry 3 -o "$metadata" -w '%{http_code}' "https://registry.npmjs.org/@registrystack%2Fapp-runtime/$VERSION")"
+          case "$status" in
+          404)
+            npm publish "$tarball" --provenance --access public --tag next
+            ;;
+          200)
+            published="$(jq -r .dist.integrity "$metadata")"
+            if [[ "$published" != "$integrity" ]]; then
+              echo "::error::npm already has @registrystack/app-runtime@$VERSION with other bytes ($published, this build $integrity)"
+              exit 1
+            fi
+            echo "::notice::npm already has @registrystack/app-runtime@$VERSION with these bytes; not publishing it again"
+            ;;
+          *)
+            echo "::error::the npm registry answered HTTP $status for @registrystack/app-runtime@$VERSION"
+            exit 1
+            ;;
+          esac
+
+  pages:
+    name: Deploy the blocks registry to GitHub Pages
+    # After publish: the registry's items declare the runtime version just
+    # published, so they must not reach adopters before it is on npm.
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

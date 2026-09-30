@@ -1,0 +1,368 @@
+/* A green masthead and ledger-paper navigation carry the website's civic
+   print identity into the compact 48px header and 220px staff sidebar. */
+.work-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  /* shadcn's own control heights for a mouse; a touch screen keeps the
+     44px tap target the tokens default to. */
+  --control-h-xs: 1.5rem;
+  --control-h-sm: 1.75rem;
+  --control-h: 2rem;
+  --control-h-lg: 2.25rem;
+}
+@media (pointer: coarse) {
+  .work-shell {
+    --control-h-xs: 2.75rem;
+    --control-h-sm: 2.75rem;
+    --control-h: 2.75rem;
+    --control-h-lg: 3rem;
+  }
+}
+.work-header {
+  height: var(--header-height);
+  flex-shrink: 0;
+  border-block-end: 2px solid var(--primary-dark);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-inline: 1rem;
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 30;
+}
+.work-header .brand {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  gap: 0.65rem;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+.work-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  background: var(--primary-foreground);
+  color: var(--primary);
+}
+.work-brand-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.work-header .beta {
+  color: var(--primary-foreground);
+  border-color: rgb(255 255 255 / 0.45);
+}
+.work-header .work-account,
+.work-header .work-menu {
+  color: var(--primary-foreground);
+}
+.work-header .work-account:hover,
+.work-header .work-menu:hover {
+  background: rgb(255 255 255 / 0.12);
+}
+.work-header > :focus-visible,
+.work-header .work-account:focus-visible {
+  outline-color: var(--primary-foreground);
+}
+/* The palette trigger reads as a search field, because that is what it opens. */
+.work-search {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 32px;
+  width: min(320px, 30vw);
+  padding-inline: 0.6rem 0.35rem;
+  border: 1px solid rgb(255 255 255 / 0.4);
+  border-radius: 0;
+  background: var(--primary-dark);
+  color: var(--primary-foreground);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: start;
+}
+.work-search:hover {
+  border-color: var(--primary-foreground);
+}
+.work-search kbd {
+  background: rgb(255 255 255 / 0.12);
+  color: var(--primary-foreground);
+}
+.work-search > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-account {
+  font-weight: 500;
+  gap: 0.35rem;
+  min-width: 0;
+}
+/* A narrow screen shows the account as an icon, the name as its label. */
+.work-account-icon {
+  display: none;
+}
+.work-account > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-account-menu {
+  min-width: 14rem;
+}
+.work-account-menu [data-slot="dropdown-menu-label"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.work-account-name {
+  color: var(--foreground);
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+.work-account-zone {
+  font-weight: 400;
+}
+.work-body {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  flex: 1;
+  background: var(--canvas);
+}
+.work-sidebar {
+  background: var(--paper);
+  border-inline-end: 1px solid var(--border);
+  padding: 1.5rem 0.75rem;
+}
+.work-sidebar-inner {
+  position: sticky;
+  inset-block-start: calc(var(--header-height) + 1.5rem);
+  display: flex;
+  flex-direction: column;
+}
+.work-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.work-nav-group + .work-nav-group {
+  margin-block-start: 0.75rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid var(--border);
+}
+.work-places a {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 40px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0;
+  font-size: 0.875rem;
+  color: var(--nav-foreground);
+}
+.work-places a:hover {
+  background: var(--panel-hover);
+}
+.work-places a[aria-current="page"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 600;
+}
+.work-main {
+  padding: 1.75rem clamp(1.25rem, 2.5vw, 2.5rem) 2.5rem;
+  max-width: 1500px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.work-main > div:not(.notice) {
+  flex: 1;
+}
+/* Strong page titles give the working surface a hierarchy without a hero. */
+.work-shell h1 {
+  font-size: clamp(1.5rem, 2.2vw, 2rem);
+  font-weight: 700;
+  line-height: 1.15;
+  margin-block-end: 0.5rem;
+  max-width: none;
+}
+.work-shell .lead {
+  font-size: 0.875rem;
+}
+.work-shell .page-heading {
+  padding-block-end: 1.25rem;
+  margin-block-end: 1.5rem;
+  border-block-end: 2px solid var(--foreground);
+}
+.work-shell .page-heading > div:first-child {
+  min-width: 0;
+}
+.work-shell .page-heading h1 {
+  overflow-wrap: anywhere;
+}
+.work-shell .card {
+  border-block-start: 2px solid var(--primary);
+}
+.work-shell .badge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.45rem;
+}
+.work-shell [data-slot="empty"] {
+  border: 1px solid var(--border);
+  border-block-start: 2px solid var(--primary);
+  background: var(--background);
+  padding: 3rem 1.5rem;
+}
+/* Ruled columns and mono labels recall the website's register examples. */
+.work-shell [data-slot="table-header"] {
+  background: var(--table-head);
+}
+.work-shell [data-slot="table-header"] [data-slot="table-head"] {
+  height: 40px;
+  color: var(--table-head-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+.work-shell [data-slot="table-body"] [data-slot="table-row"]:hover {
+  background: var(--row-hover);
+}
+.work-shell [data-slot="table-body"] [data-slot="table-row"]:focus-within {
+  background: var(--accent);
+}
+.work-shell [data-slot="table-body"] [data-state="selected"] {
+  background: var(--secondary);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+.work-shell [data-slot="table-cell"] {
+  padding-block: 0.85rem;
+}
+.work-shell .result-count {
+  font-variant-numeric: tabular-nums;
+}
+@media (pointer: coarse) {
+  .work-places a {
+    min-height: 44px;
+  }
+}
+/* The test-service note sits under the places, where the public service
+   keeps it in its page footer. */
+.work-sidebar-note {
+  margin: 1.5rem 0.75rem 0;
+  padding-block-start: 1rem;
+  border-block-start: 1px solid var(--border);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+/* The menu button opens the places in a drawer. Only a narrow screen shows
+   it, because a wide one has the sidebar. */
+.work-menu {
+  display: none;
+}
+.work-menu-sheet .work-places,
+.work-menu-sheet .work-sidebar-note {
+  padding-inline: 0.75rem;
+}
+.work-menu-sheet {
+  background: var(--paper);
+}
+/* The jump palette sits near the top so the list has room to grow downward. */
+.command-palette {
+  position: fixed;
+  inset-block-start: 12vh;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 2rem));
+  z-index: 50;
+  padding: 0.5rem;
+  border-radius: 0;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--foreground);
+  box-shadow: 6px 6px 0 rgb(22 22 22 / 0.16);
+  outline: none;
+}
+.command-palette [data-slot="input-group"] {
+  width: 100%;
+  margin-block-end: 0.35rem;
+}
+.command-palette [data-slot="combobox-list"] {
+  max-height: 50vh;
+}
+.shortcuts-help table {
+  font-size: 0.875rem;
+}
+.shortcuts-help th,
+.shortcuts-help td {
+  padding: 0.45rem 0.6rem;
+}
+@media (max-width: 900px) {
+  .work-body {
+    grid-template-columns: 1fr;
+  }
+  /* The places move into the drawer the menu button opens. */
+  .work-sidebar {
+    display: none;
+  }
+  .work-menu {
+    display: inline-flex;
+  }
+  .work-account > span {
+    display: none;
+  }
+  .work-account-icon {
+    display: block;
+  }
+  .work-header {
+    gap: 0.5rem;
+  }
+  .work-search {
+    width: auto;
+    padding-inline: 0.5rem;
+  }
+  .work-search > span,
+  .work-search kbd {
+    display: none;
+  }
+  /* Both names give way before the page scrolls sideways. */
+  .work-header .brand,
+  .work-header .work-account {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .work-header .beta {
+    display: none;
+  }
+  .work-main {
+    padding-inline: 1rem;
+  }
+}
+
+/* Staff density. A public page is read once and keeps its room; an officer
+   works a queue on this shell all day, so the tables inside it are set at the
+   spacing a case management tool uses: smaller type and shallower cells, which
+   puts more rows and more of a case on one screen. Nothing outside the staff
+   shell carries .work-shell, so the self-service pages keep the public
+   rhythm. */
+.work-shell table:where(:not([data-slot])) {
+  font-size: 0.8125rem;
+}
+.work-shell th:where(:not([data-slot])) {
+  padding: 0.55rem 0.75rem;
+}
+.work-shell td:where(:not([data-slot])),
+.work-shell tbody th:where(:not([data-slot])) {
+  padding: 0.65rem 0.75rem;
+}

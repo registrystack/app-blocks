@@ -1,0 +1,153 @@
+.document-preview {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-block-start: 3px solid var(--primary);
+  background: var(--card);
+}
+.document-preview-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--paper);
+}
+.document-preview-heading h2,
+.document-preview-heading p {
+  margin: 0;
+}
+.document-preview-heading h2 {
+  font-size: 1.125rem;
+  overflow-wrap: anywhere;
+}
+.document-controls,
+.document-control-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.document-controls {
+  padding: 0.75rem 1rem;
+  border-block-end: 1px solid var(--border);
+}
+.document-controls button,
+.document-controls a,
+.document-preview-heading button {
+  min-height: 44px;
+  min-width: 44px;
+}
+.document-page-position {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.document-viewport {
+  position: relative;
+  overflow: auto;
+  /* A classic scrollbar must not change the measured width between the
+     loading state and a tall rendered page, which would retrigger rendering. */
+  scrollbar-gutter: stable;
+  max-height: 65dvh;
+  min-height: 12rem;
+  padding: 1rem;
+  background: #dfe5df;
+}
+.document-viewport:focus-visible,
+.document-extracted-text:focus-visible,
+.document-text summary:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+}
+.document-viewport canvas {
+  display: block;
+  max-width: none;
+  margin-inline: auto;
+  background: white;
+  box-shadow: 0 2px 5px #16161626;
+}
+.document-viewport canvas[hidden] {
+  display: none;
+}
+.document-loading {
+  text-align: center;
+}
+.document-preview-error,
+.document-text {
+  padding: 1rem;
+}
+.document-preview-error + .document-viewport {
+  display: none;
+}
+.document-text {
+  border-block-start: 1px solid var(--border);
+}
+.document-text summary {
+  min-height: 44px;
+  padding-block: 0.625rem;
+}
+.document-extracted-text {
+  max-height: 20rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.document-slot-icon {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+.document-slot-heading {
+  display: flex;
+  align-items: start;
+  gap: 0.75rem;
+}
+.attachment-selection {
+  overflow-wrap: anywhere;
+}
+
+/* Keep comparison, reasoning and private notes readable beside the evidence. */
+.item-layout.with-document {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+}
+.item-page:has(.document-preview) .item-header {
+  position: static;
+}
+.item-document-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0;
+  align-self: stretch;
+}
+.item-document-column > .document-preview {
+  position: sticky;
+  top: calc(var(--header-height) + 1rem);
+}
+/* The evidence takes the second column, so what is scanned around the decision
+   moves below both and spreads sideways rather than stacking under the
+   document: the facts beside the trail, and the facts themselves in two
+   columns across the width they now have. */
+.item-layout.with-document > .item-side {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+.item-layout.with-document > .item-side .facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 1.5rem;
+}
+@media (max-width: 1100px) {
+  .item-layout.with-document {
+    grid-template-columns: 1fr;
+  }
+  .item-document-column > .document-preview {
+    position: static;
+  }
+  .item-layout.with-document > .item-side {
+    display: flex;
+  }
+  .item-layout.with-document > .item-side .facts {
+    display: block;
+  }
+}
