@@ -13,6 +13,7 @@ import type {
   ReviewTaskDetail,
 } from "./review-types.js";
 import { bregReviewSubjectSource } from "./review-types.js";
+import { entityTitle } from "./record-title.js";
 
 /** Whether this registry submitted the subject, whether or not the model describes its kind. */
 export function reviewSubjectFromRegister(
@@ -76,12 +77,11 @@ export function reviewSubjectTarget(
   return undefined;
 }
 
-/** The subject's own title, as the task shows the entity's title field. */
+/** The subject's own title, from the entity's title template or field as the task shows them. */
 export function reviewSubjectTitle(
   task: ReviewTaskDetail,
   entity: EntityModel,
 ): string | undefined {
-  return entity.title === undefined
-    ? undefined
-    : shownValue(task, entity, entity.title);
+  const shown = reviewShownValues(task.context);
+  return entityTitle(entity, (field) => shown[field.apiName]);
 }

@@ -8,6 +8,7 @@ import type {
 } from "@registrystack/app-runtime";
 import {
   bregReviewSubjectSource,
+  entityTitle,
   fieldsFromJsonSchema,
   reviewShownValues,
   reviewSubjectEntity,
@@ -39,13 +40,12 @@ function asObjectSchema(value: ReviewJson): JsonSchema {
     : {};
 }
 
-/** A record's title: the value of its entity's title field, as a record page titles it. */
+/** A record's title: its entity's title template or field, as a record page titles it. */
 function titleOf(
   entity: EntityModel,
   values: Readonly<Record<string, unknown>>,
 ): string | undefined {
-  const value = entity.title ? values[entity.title] : undefined;
-  return typeof value === "string" && value !== "" ? value : undefined;
+  return entityTitle(entity, (field) => values[field.id]);
 }
 
 /** A register record a submitted value names, read as its title. */

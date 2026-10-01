@@ -8,6 +8,7 @@ import type {
   RecordView,
   RequestView,
 } from "@registrystack/app-runtime";
+import { unavailableError } from "@registrystack/app-runtime";
 import {
   recordTask,
   useAuthority,
@@ -21,6 +22,7 @@ import { FieldValue } from "@/blocks/fields/field-value";
 import { BackLink } from "@/blocks/shell/back-link";
 import { Loading } from "@/blocks/shell/loading";
 import { ErrorPanel } from "@/blocks/shell/error-panel";
+import { useShellContent } from "@/blocks/shell/shell-content";
 import { PageHeading } from "@/blocks/shell/page-heading";
 import { StatusBadge } from "@/blocks/shell/status-badge";
 import { LiveAnnouncer, useAnnouncement } from "@/blocks/shell/live-announcer";
@@ -104,17 +106,21 @@ function sameValue(current: unknown, proposed: unknown): boolean {
 }
 
 /**
- * The target record's list columns that the request does not write: the
- * context an officer reads the change against.
+ * The target record's context fields that the request does not write: the
+ * context an officer reads the change against. Without a declared context,
+ * the record's list columns other than its title.
  */
 function contextFields(
   entities: RegisterEntities,
   written: readonly string[],
 ): FieldModel[] {
   const record = entities.record;
-  return record.list.columns.flatMap((id) => {
+  const declared = record.context;
+  return (declared ?? record.list.columns).flatMap((id) => {
     const field = fieldOf(record, id);
-    return field && id !== record.title && !written.includes(id) ? [field] : [];
+    return field && (declared || id !== record.title) && !written.includes(id)
+      ? [field]
+      : [];
   });
 }
 
@@ -214,19 +220,22 @@ export function RequestDetailPage({
   ) => Promise<DocumentSource>;
 }) {
   const register = useRegister();
+  const shell = useShellContent();
   if (register.isPending) return <Loading />;
-  const entities = register.entities;
-  if (register.error || !entities?.request)
+  if (register.error)
     return (
       <ErrorPanel
         error={register.error}
         retry={() => void register.refetch()}
       />
     );
+  const entities = register.entities;
+  if (!entities?.followedRequest)
+    return <ErrorPanel error={unavailableError(shell.unavailable)} />;
   return (
     <RequestRead
       entities={entities}
-      request={entities.request}
+      request={entities.followedRequest}
       id={id}
       useTask={useTask}
       useUpload={useUpload}

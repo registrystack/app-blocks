@@ -1,4 +1,5 @@
 import {
+  entityTitle,
   unavailableError,
   validateValues,
   type EntityModel,
@@ -36,6 +37,12 @@ export interface RegisterEntities {
   record: EntityModel;
   /** The request that changes one of those records, when the session has one. */
   request?: EntityModel;
+  /**
+   * The requests the session lists and follows: `request`, or else the model's
+   * only request entity. A profile that may follow its requests without reading
+   * the records they change sees that request target none of them.
+   */
+  followedRequest?: EntityModel;
 }
 
 /** The record and request entities of a session model, or null when it has no record entity. */
@@ -50,7 +57,13 @@ export function registerEntities(
   const records = entities.filter((entity) => entity.kind === "record");
   const record = records.find(targeted) ?? records[0];
   if (!record) return null;
-  return { record, request: targeted(record) };
+  const request = targeted(record);
+  return {
+    record,
+    request,
+    followedRequest:
+      request ?? (requests.length === 1 ? requests[0] : undefined),
+  };
 }
 
 /** The session model's register entities; `entities` is null until read, or when absent. */
@@ -72,7 +85,7 @@ export function recordPath(
   entity: string,
   id: string,
 ): string | null {
-  if (entity === entities.request?.id) return routes.request(id);
+  if (entity === entities.followedRequest?.id) return routes.request(id);
   if (entity === entities.record.id) return routes.record(id);
   return null;
 }
@@ -173,13 +186,12 @@ export function fieldOf(
   return entity.fields.find((field) => field.id === id);
 }
 
-/** The value a record is named by: its title field, or undefined when it has none. */
+/** The words a record is named by: its title template or title field, or undefined when it has neither. */
 export function recordTitle(
   entity: EntityModel,
   record: RecordView,
 ): string | undefined {
-  const value = entity.title ? record.values[entity.title] : undefined;
-  return typeof value === "string" && value !== "" ? value : undefined;
+  return entityTitle(entity, (field) => record.values[field.id]);
 }
 
 /**

@@ -49,10 +49,12 @@ export function Shell({
           <span className="beta">{c.beta}</span>
         </a>
         <div className="account">
-          <div>
-            <span>{c.signedInAs}</span>
-            <strong>{session.displayName}</strong>
-          </div>
+          {session.displayName && (
+            <div>
+              <span>{c.signedInAs}</span>
+              <strong>{session.displayName}</strong>
+            </div>
+          )}
           <SignOut />
         </div>
       </header>

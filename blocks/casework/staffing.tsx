@@ -259,11 +259,21 @@ function TargetCombobox({
 /**
  * Moves focus to the panel that reports a write's outcome, so the officer
  * reads the answer where they are instead of hunting for it down the page.
+ * Focus moves in the commit that shows the panel, and once more a frame
+ * later if it was taken away: a form that unmounts with focus on its submit
+ * button inside a drawer lets the drawer reclaim focus a frame after the
+ * button left, which an answer arriving sooner than that would lose to.
  */
 function useOutcomeFocus<T extends HTMLElement>(shown: boolean) {
   const panel = useRef<T>(null);
-  useEffect(() => {
-    if (shown) panel.current?.focus();
+  useLayoutEffect(() => {
+    const target = panel.current;
+    if (!shown || !target) return;
+    target.focus();
+    const frame = requestAnimationFrame(() => {
+      if (document.activeElement !== target) target.focus();
+    });
+    return () => cancelAnimationFrame(frame);
   }, [shown]);
   return panel;
 }
@@ -1413,10 +1423,6 @@ export function ReassignBody({
   // assignment of an item, made here or there, locks both.
   const batch = useStaffingAssignments(movable.map((item) => item.id));
   const [answered, setAnswered] = useState(0);
-  const results = useRef<HTMLElement>(null);
-  useEffect(() => {
-    if (answered) results.current?.focus();
-  }, [answered]);
   useEffect(
     () => onUnresolvedChange(batch.locked),
     [onUnresolvedChange, batch.locked],
@@ -1466,9 +1472,12 @@ export function ReassignBody({
   // Sending unmounts the form and the submit button that held focus. Taking
   // focus in the same commit keeps the dialog from reclaiming it for itself a
   // frame later, which an answer arriving sooner than that would lose to.
-  useLayoutEffect(() => {
-    if (sent) results.current?.focus();
-  }, [sent]);
+  const results = useOutcomeFocus<HTMLElement>(sent);
+  // A retry leaves the batch sent, so each answer after it brings focus back
+  // to the results too.
+  useEffect(() => {
+    if (answered) results.current?.focus();
+  }, [answered, results]);
   const unresolvedIds = movable
     .map((item) => item.id)
     .filter((id) => commandUnresolved(batch.stateOf(id)));

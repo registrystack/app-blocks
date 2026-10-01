@@ -122,6 +122,8 @@ export interface CaseworkContent {
   offline: string;
   /** Signs the officer out, in the account menu. */
   signOut: string;
+  /** Names the account menu when the session has no display name. */
+  account: string;
   /** Shown when signing out failed and the officer is still signed in. */
   signOutFailed: string;
   /** The place label for an officer's own casework inbox. */
@@ -673,6 +675,7 @@ export const caseworkContent: Required<CaseworkContent> = {
   offline:
     "You appear to be offline. Reads and submissions need a connection. Keep this page open to retain unsaved answers.",
   signOut: "Sign out",
+  account: "Your account",
   signOutFailed: "Signing out failed. Try again.",
   navInbox: "Inbox",
   navSetup: "Setup",

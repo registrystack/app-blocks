@@ -35,11 +35,21 @@ export interface EntityModel {
   sections: { id: string; label: string; fields: string[] }[];
   /** The field a record is named by. */
   title?: string;
+  /**
+   * Words a record is named by, built from its fields, such as
+   * `{make} {model} ({vin})`; the title field names a record missing one of them.
+   */
+  titleTemplate?: string;
   list: {
     columns: string[];
     filters: { field: string; label: string }[];
     pageSize: number;
   };
+  /**
+   * The fields a requested change to one of these records is read against,
+   * beside the fields the request writes; the list columns when absent.
+   */
+  context?: string[];
   operations: {
     create?: boolean;
     patch?: boolean;

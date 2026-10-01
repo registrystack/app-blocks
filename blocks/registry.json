@@ -1455,6 +1455,7 @@
         "@registrystack/shell-page-heading",
         "@registrystack/shell-status-badge",
         "@registrystack/shell-live-announcer",
+        "@registrystack/shell-content",
         "@registrystack/ui-button"
       ],
       "files": [

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import {
+  unavailableError,
   type EntityModel,
   type RecordView,
   type RequestState,
@@ -68,16 +69,21 @@ function waitingOn(state: string, pages: PagesContent): string {
 /** The session's requests; which entity they are comes from the model. */
 export function RequestQueuePage() {
   const register = useRegister();
+  const shell = useShellContent();
   if (register.isPending) return <Loading />;
-  const entities = register.entities;
-  if (register.error || !entities?.request)
+  if (register.error)
     return (
       <ErrorPanel
         error={register.error}
         retry={() => void register.refetch()}
       />
     );
-  return <RequestQueue entities={entities} request={entities.request} />;
+  const entities = register.entities;
+  if (!entities?.followedRequest)
+    return <ErrorPanel error={unavailableError(shell.unavailable)} />;
+  return (
+    <RequestQueue entities={entities} request={entities.followedRequest} />
+  );
 }
 
 function RequestQueue({

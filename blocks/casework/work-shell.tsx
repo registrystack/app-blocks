@@ -135,7 +135,7 @@ function AccountMenu({
   container,
   renderSignOutError,
 }: {
-  displayName: string;
+  displayName?: string;
   container: RefObject<HTMLElement | null>;
   /** Renders the host's own error when sign-out fails. Falls back to a generic notice when omitted. */
   renderSignOutError?: (error: unknown) => ReactNode;
@@ -144,6 +144,7 @@ function AccountMenu({
   const [shortcuts, setShortcuts] = useShortcutsSetting();
   const signOut = useSignOut();
   const [error, setError] = useState<unknown>(null);
+  const name = displayName ?? c.account;
   return (
     <>
       <DropdownMenu>
@@ -153,12 +154,12 @@ function AccountMenu({
               variant="ghost"
               size="sm"
               className="work-account"
-              aria-label={displayName}
+              aria-label={name}
             />
           }
         >
           <CircleUserRound aria-hidden="true" className="work-account-icon" />
-          <span>{displayName}</span>
+          <span>{name}</span>
           <ChevronDown size={14} aria-hidden="true" />
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -168,7 +169,7 @@ function AccountMenu({
         >
           <DropdownMenuGroup>
             <DropdownMenuLabel>
-              <span className="work-account-name">{displayName}</span>
+              <span className="work-account-name">{name}</span>
               <span className="work-account-zone">{caseworkLocalZone()}</span>
             </DropdownMenuLabel>
           </DropdownMenuGroup>
@@ -207,7 +208,7 @@ function Frame({
   renderSignOutError,
   children,
 }: {
-  displayName: string;
+  displayName?: string;
   brand: string;
   groups: NavGroup[];
   current: NavItem | null;
@@ -328,7 +329,7 @@ function Frame({
 
 export interface WorkShellProps {
   /** The signed-in officer's display name, shown in the header and menu. */
-  displayName: string;
+  displayName?: string;
   /** The service name, shown in the header and the mobile drawer. */
   brand: string;
   /** The places this session can go, grouped by the dividers between them. */

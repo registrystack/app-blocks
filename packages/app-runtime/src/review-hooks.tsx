@@ -16,7 +16,6 @@ import {
   type CommandSpec,
 } from "./command-hooks.js";
 import type { CommandMarker, CommandState, ProbeVerdict } from "./commands.js";
-import { notAuthorized } from "./problems.js";
 import type { HostClient } from "./index.js";
 import { useAuthority, useHost } from "./react.js";
 import type {
@@ -440,19 +439,12 @@ export function useReviewClocks(requestId: string) {
 export function useReviewAccountability(eventId: string, enabled: boolean) {
   const host = useHost(),
     session = useAuthority();
-  const accountability = useQuery({
+  return useQuery({
     queryKey: [session.scope, "review-accountability", eventId],
     queryFn: () => host.reviewAccountability(eventId),
     enabled,
     retry: false,
   });
-  // Read on access, so a page that does not ask does not follow the error.
-  return Object.defineProperty(accountability, "notAuthorized", {
-    get: () => notAuthorized(accountability.error),
-  }) as typeof accountability & {
-    /** The session is not a supervisor of the task's queue team. */
-    readonly notAuthorized: boolean;
-  };
 }
 
 interface AssignmentInput {

@@ -3,7 +3,8 @@ import type { CaseworkStaffingActionReference } from "./casework-staffing-types.
 export interface AuthenticatedSession {
   authenticated: true;
   scope: string;
-  displayName: string;
+  /** Absent when the identity provider releases no name for the person. */
+  displayName?: string;
   role: "holder" | "registrar" | "reviewer" | "supervisor" | "administrator";
   caseworkProfile?: "staff" | "supervisor" | "administrator";
   /** Opaque display discriminator. Casework remains authoritative for recovery. */

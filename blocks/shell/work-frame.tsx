@@ -22,7 +22,7 @@ export function WorkFrame({
   route,
   children,
 }: {
-  displayName: string;
+  displayName?: string;
   brand: string;
   groups: NavGroup[];
   /** The place the root route stands for, so it is marked current there. */

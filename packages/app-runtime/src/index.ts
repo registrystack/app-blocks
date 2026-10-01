@@ -3,6 +3,7 @@ export * from "./review-types.js";
 export * from "./review-result.js";
 export * from "./review-subject.js";
 export * from "./model.js";
+export * from "./record-title.js";
 export * from "./schema-fields.js";
 import type {
   RecordPage,
