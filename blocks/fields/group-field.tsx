@@ -35,28 +35,35 @@ export function GroupValue({ field, value }: FieldValueProps) {
   const items = asItems(value);
   const subs = field.items ?? [];
   return (
-    <table className="value-table group-value">
-      <thead>
-        <tr>
-          {subs.map((sub) => (
-            <th key={sub.id} scope="col">
-              {sub.label}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item, index) => (
-          <tr key={index}>
+    <div
+      className="value-table-scroll"
+      role="region"
+      aria-label={field.label}
+      tabIndex={0}
+    >
+      <table className="value-table group-value">
+        <thead>
+          <tr>
             {subs.map((sub) => (
-              <td key={sub.id}>
-                <FieldValue field={sub} value={item[sub.id]} />
-              </td>
+              <th key={sub.id} scope="col">
+                {sub.label}
+              </th>
             ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {items.map((item, index) => (
+            <tr key={index}>
+              {subs.map((sub) => (
+                <td key={sub.id}>
+                  <FieldValue field={sub} value={item[sub.id]} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

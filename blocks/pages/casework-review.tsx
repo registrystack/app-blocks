@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type {
   RegistryModel,
   ReviewTask,
@@ -39,6 +40,9 @@ import { Loading } from "@/blocks/shell/loading";
 import { PageHeading } from "@/blocks/shell/page-heading";
 import { Notice } from "@/blocks/lib/notice";
 import { fill } from "@/blocks/lib/format";
+import { useBlockContent } from "@/blocks/lib/content";
+import { tabCursors, useTabCursors } from "@/blocks/lib/tab-memory";
+import { splitRoute, useRoute } from "@/blocks/shell/routing";
 import {
   useReviewPageContent,
   type ReviewPageContent,
@@ -53,11 +57,44 @@ function statusLine(r: ReviewPageContent, task: ReviewTask) {
     : r.statusHeldElsewhere;
 }
 
+const REVIEWS_PATH = "/casework/reviews";
+
+/** The hash query is the only source of truth for the page's place in the queue. */
+function parseQueueView(query: URLSearchParams) {
+  const cursor = query.get("cursor") || undefined;
+  return {
+    cursor,
+    // A page number means nothing without the cursor that reached it.
+    page: cursor ? Math.max(2, Number(query.get("page")) || 2) : 1,
+  };
+}
+
+function writeQueueView(view: { cursor?: string; page: number }): string {
+  const params = new URLSearchParams();
+  if (view.cursor) params.set("cursor", view.cursor);
+  if (view.cursor && view.page > 1) params.set("page", String(view.page));
+  const search = params.toString();
+  return `${REVIEWS_PATH}${search ? `?${search}` : ""}`;
+}
+
+/** The page's own cursor stack, separate from every other list's. */
+const reviewCursors = tabCursors("casework.reviews.cursors");
+
 /** The review queue: tasks this officer's Casework profile can see. */
 export function CaseworkReviewsPage() {
   const r = useReviewPageContent();
-  const queue = useReviewQueue();
+  const c = useCaseworkContent();
+  const pagerWords = useBlockContent();
+  const view = parseQueueView(splitRoute(useRoute()).query);
+  // Host contract: a cursor continues the list it came from, so it is sent alone.
+  const queue = useReviewQueue(view.cursor ? { cursor: view.cursor } : {});
+  const cursors = useTabCursors(reviewCursors, view);
+  const previous = cursors.previous;
+  const nextCursor = queue.data?.nextCursor ?? undefined;
   const items = queue.data?.items ?? [];
+  const shortfall = queue.data?.status
+    ? c.caseworkPageStatus[queue.data.status]
+    : undefined;
   return (
     <>
       <PageHeading title={r.queueTitle} description={r.queueDescription} />
@@ -66,7 +103,9 @@ export function CaseworkReviewsPage() {
       ) : !queue.data ? (
         <Loading />
       ) : items.length === 0 ? (
-        <p className="muted">{r.queueEmpty}</p>
+        // A page cut short can be empty and still continue; only the end of
+        // the queue says nothing is waiting.
+        !nextCursor && <p className="muted">{r.queueEmpty}</p>
       ) : (
         <Table>
           <TableCaption>{r.queueCaption}</TableCaption>
@@ -94,6 +133,41 @@ export function CaseworkReviewsPage() {
             ))}
           </TableBody>
         </Table>
+      )}
+      {shortfall && <p className="muted">{shortfall}</p>}
+      {(previous || nextCursor) && (
+        <div className="actions w-auto gap-1">
+          {previous && (
+            <Button
+              render={
+                <a
+                  href={`#${writeQueueView(previous)}`}
+                  onClick={cursors.back}
+                />
+              }
+              variant="outline"
+              size="icon-sm"
+            >
+              <ChevronLeft aria-hidden="true" />
+              <span className="sr-only">{pagerWords.previous}</span>
+            </Button>
+          )}
+          {nextCursor && (
+            <Button
+              render={
+                <a
+                  href={`#${writeQueueView({ cursor: nextCursor, page: view.page + 1 })}`}
+                  onClick={() => cursors.next(nextCursor, view.page + 1)}
+                />
+              }
+              variant="outline"
+              size="icon-sm"
+            >
+              <ChevronRight aria-hidden="true" />
+              <span className="sr-only">{pagerWords.next}</span>
+            </Button>
+          )}
+        </div>
       )}
     </>
   );

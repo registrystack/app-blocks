@@ -457,7 +457,7 @@ td:where(:not([data-slot])) {
   padding: 1.15rem 1.25rem;
   border-block-start: 1px solid var(--border-subtle);
   max-width: 260px;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 /* A row header is data, not a column label: keep body sizing and colour. */
 tbody th:where(:not([data-slot])) {
@@ -1219,6 +1219,10 @@ td.num {
   text-align: end;
   font-variant-numeric: tabular-nums;
 }
+.value-table-scroll {
+  overflow-x: auto;
+}
+.value-table-scroll[tabindex="0"]:focus-visible,
 .table-wrap[tabindex="0"]:focus-visible {
   outline: 3px solid var(--ring);
   outline-offset: 3px;

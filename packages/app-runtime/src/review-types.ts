@@ -3,7 +3,7 @@
  * officer's own Casework profile; nothing here authorizes an action, because
  * Casework checks authority on every write.
  */
-import type { CaseworkPrincipal } from "./types.js";
+import type { CaseworkPageStatus, CaseworkPrincipal } from "./types.js";
 
 export type ReviewJson =
   | string
@@ -31,6 +31,8 @@ export interface ReviewTask {
 export interface ReviewTaskPage {
   items: ReviewTask[];
   nextCursor?: string | null;
+  /** Anything but complete means the page was cut short; an empty page may still continue. */
+  status: CaseworkPageStatus;
 }
 export interface ReviewQueueFilters {
   queue?: string;
