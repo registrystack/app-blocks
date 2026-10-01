@@ -5,8 +5,9 @@
 per file or cohesive group. Every `ui/` file ships as its own kit item, including the ones that
 are unmodified from upstream shadcn, so an install never needs network access to shadcn.com and
 always matches what this repository tests. See `NOTICE.md` for where each `ui/` file comes from,
-which ones carry local changes or have drifted from live upstream, and the one open gap (the
-unpublished `@registrystack/app-runtime` dependency).
+which ones carry local changes or have drifted from live upstream, and how the
+`@registrystack/app-runtime` dependency reaches npm. This directory is maintained in the
+Registry Stack App Kit and published without its tests; the commands below run there.
 
 ## Building
 
@@ -21,7 +22,7 @@ each time; nothing under `registry-dist/` is checked in or hand-edited).
     pnpm run test:registry-install
 
 Builds the registry, packs `@registrystack/app-runtime` and serves both it and the built items
-from a loopback HTTP server (`scripts/blocks-local-registry-server.mjs`), scaffolds a throwaway
+from a loopback HTTP server, scaffolds a throwaway
 React + TypeScript project with a fresh project's default shadcn aliases, runs `shadcn add` for
 `record-form`, `request-changes`, `field-renderers`, `request-attachment-slots` and
 `ui-input-group` (pulling in `ui-field` and `ui-textarea`, two files that are unmodified from
@@ -63,6 +64,5 @@ the check passing is itself the proof that nothing here needed real network acce
 The registry is served at `https://ui.registrystack.org` (`registry.json`'s `homepage`), under
 `r/<minor>/` and `r/latest/`. Nothing here publishes it: a release pushes this directory, without
 its tests, to the public repository `registrystack/app-blocks`, whose workflow builds and deploys
-it (the kit's `docs/releasing.md`). Locally, `--output registry-dist` and pointing `shadcn add` at
-a built item's path or a loopback URL (see `scripts/test-blocks-registry-install.sh`) is how it
-is exercised.
+it (the kit's release procedure). Locally, `--output registry-dist` and pointing `shadcn add` at
+a built item's path or a loopback URL (as `test:registry-install` does) is how it is exercised.

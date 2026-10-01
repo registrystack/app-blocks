@@ -61,16 +61,14 @@ for them, on purpose, so that what installs from it is always what this reposito
 ## Known gaps
 
 - `@registrystack/app-runtime`, the one runtime npm dependency several blocks declare, is
-  `workspace:*` in this monorepo. A release publishes it to npm's `next` dist-tag from the public
-  repository `registrystack/app-blocks`, after the maintainer approves the publish
-  ([releasing](../../docs/releasing.md)); until the first release, npm holds only an inert
-  `0.0.0` placeholder. `registry.json` declares it at a range on its current
-  version (`@registrystack/app-runtime@~0.37.0-next.0`) as an ordinary npm dependency, the same
-  way any other dependency is declared, so an adopter's package manager can fetch it only once
-  that release is out. `scripts/test-blocks-registry-install.sh` proves the registry otherwise
-  installs cleanly by packing the workspace package with `pnpm pack` and serving it from a
-  loopback registry for the duration of the test; that is a test-only stand-in, not a
-  distribution answer.
+  `workspace:*` in this monorepo. Each release publishes it to npm's `next` dist-tag from the
+  public repository `registrystack/app-blocks`, after the maintainer approves the publish. Until
+  the first stable version, npm's `latest` tag holds only an inert `0.0.0` placeholder, so an
+  install that names no version gets the placeholder. `registry.json` declares it at a range on
+  its current version (`@registrystack/app-runtime@~0.37.0-next.0`), which resolves to the newest
+  `next` release of that version. The kit's `test:registry-install` packs the workspace package
+  with `pnpm pack` and serves it from a loopback registry for the duration of the test, so it
+  proves what this repository builds, not what npm serves.
 
 Upstream license, shadcn/ui:
 
