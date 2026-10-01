@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -1462,6 +1463,12 @@ export function ReassignBody({
     return state !== "idle" && state !== "sending";
   });
   const sent = movable.some((item) => batch.stateOf(item.id).state !== "idle");
+  // Sending unmounts the form and the submit button that held focus. Taking
+  // focus in the same commit keeps the dialog from reclaiming it for itself a
+  // frame later, which an answer arriving sooner than that would lose to.
+  useLayoutEffect(() => {
+    if (sent) results.current?.focus();
+  }, [sent]);
   const unresolvedIds = movable
     .map((item) => item.id)
     .filter((id) => commandUnresolved(batch.stateOf(id)));

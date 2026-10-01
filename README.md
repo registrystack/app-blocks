@@ -6,7 +6,9 @@ Two published parts of the Registry Stack App Kit:
   React hooks that the kit's apps and blocks use to talk to their app host.
 - A [shadcn](https://ui.shadcn.com) registry of blocks (`blocks/`), served at
   <https://ui.registrystack.org>: record, request, casework and shell components that an app
-  copies in and then owns.
+  copies in and then owns. The site's front page lists every item with its install line, and
+  `/gallery/` (`gallery/`, prebuilt static files) shows the blocks' screen states for a fictional
+  nursing licence register with synthetic data.
 
 ## Adding blocks
 

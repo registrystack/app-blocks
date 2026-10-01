@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import type { ReviewHistoryEntry } from "@registrystack/app-runtime";
+import { notAuthorized, problemView, type ReviewHistoryEntry } from "@registrystack/app-runtime";
 import {
   useAuthority,
   useReviewAccountability,
@@ -7,7 +7,7 @@ import {
   useReviewHistory,
 } from "@registrystack/app-runtime/react";
 import { Button } from "@/components/ui/button";
-import { useCaseworkContent } from "@/blocks/casework/casework-content";
+import { useCaseworkContent, type CaseworkContent } from "@/blocks/casework/casework-content";
 import { caseworkDateTime, caseworkPerson, Loading } from "@/blocks/casework/shared";
 import { fill } from "@/blocks/lib/format";
 
@@ -33,6 +33,13 @@ function useHistoryKind(): (kind: string) => string {
   };
 }
 
+/** What a failed read of who decided says: a supervisor's reading only, or no such record, or the problem itself. */
+export function accountabilityErrorText(c: CaseworkContent, error: Error) {
+  if (notAuthorized(error)) return c.accountabilityUnavailable;
+  if (problemView(error).kind === "unavailable") return c.accountabilityNotFound;
+  return error.message;
+}
+
 function Accountability({ entry }: { entry: ReviewHistoryEntry }) {
   const c = useCaseworkContent();
   const [asked, setAsked] = useState(false);
@@ -46,7 +53,7 @@ function Accountability({ entry }: { entry: ReviewHistoryEntry }) {
   if (record.error)
     return (
       <span className="muted">
-        {record.notAuthorized ? c.accountabilityUnavailable : record.error.message}
+        {accountabilityErrorText(c, record.error)}
       </span>
     );
   if (!record.data) return <Loading />;

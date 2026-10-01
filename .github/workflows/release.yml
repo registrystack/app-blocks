@@ -1,7 +1,8 @@
 # Publishes one release of this repository when a tag v<version> is pushed:
 # @registrystack/app-runtime to npm, with a provenance statement, through
 # trusted publishing, and the shadcn blocks registry to GitHub Pages at
-# https://ui.registrystack.org. The tag and the tree come from the release
+# https://ui.registrystack.org, with a catalogue page at / and the states
+# gallery at /gallery/. The tag and the tree come from the release
 # workflow of the private development repository, which runs its gates first.
 # npm trusts this file by name (release.yml) and the environment npm.
 name: Release
@@ -115,6 +116,25 @@ jobs:
               exit 1
             fi
           done
+          echo "$(find site -type f | wc -l) files under site/"
+
+      # The catalogue page lists whatever registry.json holds, so a new item
+      # needs no edit here.
+      - name: Write the catalogue page at the site root
+        env:
+          MINOR: ${{ steps.version.outputs.minor }}
+        run: |
+          node blocks/site/build-index.mjs --registry blocks/registry-dist/registry.json --minor "$MINOR" --out site/index.html
+
+      # gallery/ is the kit's states gallery, built there and exported as
+      # static files; it is served unchanged.
+      - name: Lay out gallery/
+        run: |
+          if [[ ! -f gallery/index.html ]]; then
+            echo "::error::gallery/index.html is missing from the release tree"
+            exit 1
+          fi
+          cp -R gallery site/gallery
           echo "$(find site -type f | wc -l) files under site/"
 
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

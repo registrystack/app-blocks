@@ -191,6 +191,8 @@ export interface CaseworkContent {
   caseworkHistoryActions: Readonly<Record<string, string>>;
   /** One history entry: "{actor} {what}, {when}." */
   caseworkHistoryLine: string;
+  /** Who an entry names when Casework gave the acting account no display name. */
+  caseworkHistoryUnnamedActor: string;
   /** One history entry with its reason: "{actor} {what}, {when}. Reason: {reason}". */
   caseworkHistoryLineWithReason: string;
   /** Opens an entry's attempt reference, in a disclosure. */
@@ -331,6 +333,7 @@ export interface CaseworkContent {
   /** "{person}, as {profile}: {decision}" */
   accountabilityLine: string;
   accountabilityUnavailable: string;
+  accountabilityNotFound: string;
 
   // ClocksPanel
   clocksHeading: string;
@@ -743,6 +746,7 @@ export const caseworkContent: Required<CaseworkContent> = {
     other: "took an action these words do not yet describe",
   },
   caseworkHistoryLine: "{actor} {what}, {when}.",
+  caseworkHistoryUnnamedActor: "A colleague",
   caseworkHistoryLineWithReason: "{actor} {what}, {when}. Reason: {reason}",
   caseworkHistoryDetails: "Details for support",
   caseworkAttemptLine: "Attempt reference: {reference}",
@@ -890,6 +894,7 @@ export const caseworkContent: Required<CaseworkContent> = {
   accountabilityLine: "{person}, as {profile}: {decision}",
   accountabilityUnavailable:
     "Who decided can only be read by a supervisor of this queue.",
+  accountabilityNotFound: "No record of who decided this could be found.",
   clocksHeading: "Clocks",
   clocksEmpty: "No clocks run on this request.",
   clockName: "Clock {number}",

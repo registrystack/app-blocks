@@ -286,7 +286,7 @@ function Hold({
   // The task is read again after a refusal that says it moved on.
   useRereadOnRefusal(state, reread);
   return (
-    <section className="review-hold" aria-label={r.statusHeldByYou}>
+    <section className="review-hold" aria-label={statusLine(r, task)}>
       {!hold.locked && task.status === "open" && (
         <Button
           disabled={rereading}

@@ -165,17 +165,23 @@ function HistoryLine({ entry }: { entry: CaseworkHistoryEntry }) {
     c.caseworkHistoryActions[entry.action] ??
     c.caseworkHistoryActions.other;
   const when = caseworkWhenPhrase(entry.occurredAt, c);
+  // An account Casework has no display name for reads as neutral words; its
+  // subject stays on the entry's actorPrincipal.
+  const actor =
+    entry.actorPrincipal && !entry.actorPrincipal.displayName?.trim()
+      ? c.caseworkHistoryUnnamedActor
+      : entry.actor;
   return (
     <li>
       <p>
         {entry.reason
           ? fill(c.caseworkHistoryLineWithReason, {
-              actor: entry.actor,
+              actor,
               what,
               when,
               reason: entry.reason,
             })
-          : fill(c.caseworkHistoryLine, { actor: entry.actor, what, when })}
+          : fill(c.caseworkHistoryLine, { actor, what, when })}
       </p>
       {entry.attemptReference && (
         <details>
