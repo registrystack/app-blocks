@@ -43,7 +43,10 @@ export function ErrorPanel({
         : problem.message!;
   } else if (problem.kind === "refused") {
     title = c.refusedTitle;
-    body = c.refusedBody;
+    body =
+      refusalDetail(problem) === "outside-boundary"
+        ? c.outsideBoundaryBody
+        : c.refusedBody;
   } else if (problem.kind === "contract-changed") {
     title = c.contractChangedTitle;
     body = c.contractChangedBody;

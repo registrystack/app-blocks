@@ -99,6 +99,8 @@ export interface PagesContent {
   reviewSubmissionUnknownBody: string;
   reviewOperatorAttentionTitle: string;
   reviewOperatorAttentionBody: string;
+  /** The operator-attention body by BREG's recovery code, in place of `reviewOperatorAttentionBody` for a code listed here. */
+  reviewOperatorAttentionBodies: Readonly<Record<string, string>>;
   /** A request action's label, by its lifecycle action, before the action's own. */
   actionLabels: Readonly<Record<string, string>>;
   /** Shown where a holder's session finds this request unavailable. */
@@ -262,6 +264,7 @@ export const pagesContent: PagesContent = {
   reviewOperatorAttentionTitle: "Review recovery needs attention",
   reviewOperatorAttentionBody:
     "Automatic review recovery stopped. An operator must reconcile this request before it continues.",
+  reviewOperatorAttentionBodies: {},
   actionLabels: {},
   requestUnavailable: "This request is unavailable",
 

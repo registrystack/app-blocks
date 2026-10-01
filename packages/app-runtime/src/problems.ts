@@ -124,6 +124,7 @@ export type RefusalDetail =
   | "initiator-excluded"
   | "not-retained"
   | "bytes-unavailable"
+  | "outside-boundary"
   | "source-profile-required";
 const refusalDetails: Record<string, RefusalDetail> = {
   "command.not-applied": "not-applied",
@@ -131,6 +132,7 @@ const refusalDetails: Record<string, RefusalDetail> = {
   "attachment.not-retained": "not-retained",
   "attachment.bytes-unavailable": "bytes-unavailable",
   "source-profile.required": "source-profile-required",
+  "write.outside-boundary": "outside-boundary",
 };
 export function refusalDetail(
   refusal: { code: string | null } | null | undefined,

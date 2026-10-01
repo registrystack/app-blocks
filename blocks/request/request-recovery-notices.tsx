@@ -6,7 +6,9 @@ import { Notice } from "@/blocks/lib/notice";
  * withdrawal it has not confirmed, a submission whose receipt is uncertain,
  * and a recovery that stopped for an operator. Each keeps the request where
  * it is; none offers an action. The titles and bodies are the caller's own,
- * since they may name the reviewing service and the record kind.
+ * since they may name the reviewing service and the record kind. The
+ * operator-attention body is taken from `operatorAttentionBodies` by the
+ * recovery's code when it has one, and from `operatorAttentionBody` otherwise.
  */
 export function ReviewRecoveryNotices({
   request,
@@ -16,6 +18,7 @@ export function ReviewRecoveryNotices({
   submissionUnknownBody,
   operatorAttentionTitle,
   operatorAttentionBody,
+  operatorAttentionBodies = {},
 }: {
   request: RequestView | undefined;
   withdrawalPendingTitle: string;
@@ -24,9 +27,15 @@ export function ReviewRecoveryNotices({
   submissionUnknownBody: string;
   operatorAttentionTitle: string;
   operatorAttentionBody: string;
+  operatorAttentionBodies?: Readonly<Record<string, string>>;
 }) {
   const review = request?.review;
   if (!review) return null;
+  const code = review.recovery.code;
+  const keyedBody =
+    code !== undefined && Object.hasOwn(operatorAttentionBodies, code)
+      ? operatorAttentionBodies[code]
+      : undefined;
   return (
     <>
       {review.submission.state === "cancelling" && (
@@ -41,7 +50,7 @@ export function ReviewRecoveryNotices({
       )}
       {review.recovery.state === "operatorAttention" && (
         <Notice tone="warning" title={operatorAttentionTitle}>
-          <p>{operatorAttentionBody}</p>
+          <p>{keyedBody ?? operatorAttentionBody}</p>
         </Notice>
       )}
     </>

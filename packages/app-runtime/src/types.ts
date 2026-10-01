@@ -352,8 +352,8 @@ export interface ChangeRequestReview {
   submission: { state: string; requestId?: string };
   result: { state: string; completedAt?: string };
   delivery: { state: string };
-  application: { mode: string; state: string };
-  recovery: { state: string };
+  application: { mode: string; state: string; attempts?: number };
+  recovery: { state: string; code?: string };
 }
 export interface Page<T> {
   items: T[];

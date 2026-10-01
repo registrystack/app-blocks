@@ -192,6 +192,7 @@ function RequestRecoveryNotices({
       submissionUnknownBody={pages.reviewSubmissionUnknownBody}
       operatorAttentionTitle={pages.reviewOperatorAttentionTitle}
       operatorAttentionBody={pages.reviewOperatorAttentionBody}
+      operatorAttentionBodies={pages.reviewOperatorAttentionBodies}
     />
   );
 }

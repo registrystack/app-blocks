@@ -35,6 +35,8 @@ export interface ShellContent {
   conflictBody: string;
   refusedTitle: string;
   refusedBody: string;
+  /** A create the registry refused because it falls outside the caller's row boundary. */
+  outsideBoundaryBody: string;
   contractChangedTitle: string;
   contractChangedBody: string;
   expiredTitle: string;
@@ -124,6 +126,8 @@ export const shellContent: ShellContent = {
   conflictBody: "This action is no longer available. The request has moved on.",
   refusedTitle: "This action is not available here",
   refusedBody: "Reload the page to see its current state.",
+  outsideBoundaryBody:
+    "You cannot create this record. It is outside the records you may change.",
   contractChangedTitle: "The service has changed since you signed in",
   contractChangedBody: "Sign in again to pick up the change.",
   expiredTitle: "Your session has ended",
