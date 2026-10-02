@@ -13,6 +13,7 @@ import { splitRoute, useRoute } from "@/blocks/shell/routing";
 import { useShellContent } from "@/blocks/shell/shell-content";
 import { ChangeRequestFormPage, type ChangeRequestTask } from "@/blocks/pages/change-request-form-page";
 import { CreateRecordPage, type CreateRecordTask } from "@/blocks/pages/create-record-page";
+import { RecordActionPage } from "@/blocks/pages/record-action-page";
 import {
   PendingUploadsNotice,
   RecoveryNotice,
@@ -103,6 +104,8 @@ function ServiceWork(props: ServiceAppProps & { labels: ServiceAppLabels }) {
   else if (path === "/" || match.kind === "records") page = <RecordListPage />;
   else if (match.kind === "createRecord")
     page = <CreateRecordPage useTask={useCreateTask} />;
+  else if (match.kind === "recordAction")
+    page = <RecordActionPage actionId={match.id} useTask={useCreateTask} />;
   else if (match.kind === "changeRecord")
     page = (
       <ChangeRequestFormPage recordId={match.id} useTask={useChangeTask} />

@@ -23,7 +23,11 @@ export function ErrorPanel({
   // facts that are not meant as page copy.
   let title = c.serviceUnavailable,
     body = c.serviceUnavailableBody;
-  if (problem.casework) {
+  if (problem.worded) {
+    // The registry's own words for a refused write, from its UI model.
+    title = c.registryRefusedTitle;
+    body = problem.message!;
+  } else if (problem.casework) {
     title =
       problem.kind === "recovery-pending"
         ? c.unknownTitle

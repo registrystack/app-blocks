@@ -7,7 +7,7 @@ import {
 import type { ChangeRequestTask } from "@/blocks/pages/change-request-form-page";
 import type { CreateRecordTask } from "@/blocks/pages/create-record-page";
 import type { RemovalOutcome } from "@/blocks/pages/record-attachments";
-import { useRegister } from "@/blocks/pages/record";
+import { routedRequest, useRegister } from "@/blocks/pages/record";
 import {
   matchRegisterRoute,
   useRegisterRoutes,
@@ -51,6 +51,15 @@ function useCurrentRequestId(): string {
   return match.kind === "request" ? match.id : "";
 }
 
+/** The id of the request entity the current route names, or the followed one, or "". */
+function useRoutedRequestId(): string {
+  const entities = useRegister().entities;
+  const { query } = splitRoute(useRoute());
+  return (
+    (entities && (routedRequest(entities, query) ?? entities.request))?.id ?? ""
+  );
+}
+
 /** An upload command for one slot of any record, aimed by entity and id. */
 export function useRecordUpload(
   entity: string,
@@ -71,12 +80,12 @@ export function useRecordRemoval(
 
 /** The upload command for a request's attachment slots, aimed at the request the route names. */
 export function useUpload(slot: string): UploadOutcome {
-  const requestEntityId = useRegister().entities?.request?.id ?? "";
+  const requestEntityId = useRoutedRequestId();
   return useRecordUpload(requestEntityId, useCurrentRequestId(), slot);
 }
 
 /** The removal command for a request's attachment slots, aimed at the request the route names. */
 export function useRemoval(slot: string): RemovalOutcome {
-  const requestEntityId = useRegister().entities?.request?.id ?? "";
+  const requestEntityId = useRoutedRequestId();
   return useRecordRemoval(requestEntityId, useCurrentRequestId(), slot);
 }

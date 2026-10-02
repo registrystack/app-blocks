@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useEffect } from "react";
 import { ArrowUpRight } from "lucide-react";
 import type {
   EntityModel,
@@ -8,19 +8,22 @@ import type {
   RecordView,
   RequestView,
 } from "@registrystack/app-runtime";
-import { unavailableError } from "@registrystack/app-runtime";
+import { backOffInterval, unavailableError } from "@registrystack/app-runtime";
 import {
   recordTask,
   useAuthority,
   useRecord,
   useRequesterReviewNotes,
+  useReviewHistory,
 } from "@registrystack/app-runtime/react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/blocks/lib/notice";
+import { humanizeName } from "@/blocks/lib/format";
 import { useBlockContent, type BlockContent } from "@/blocks/lib/content";
 import { FieldValue } from "@/blocks/fields/field-value";
 import { BackLink } from "@/blocks/shell/back-link";
 import { Loading } from "@/blocks/shell/loading";
+import { splitRoute, useRoute } from "@/blocks/shell/routing";
 import { ErrorPanel } from "@/blocks/shell/error-panel";
 import { useShellContent } from "@/blocks/shell/shell-content";
 import { PageHeading } from "@/blocks/shell/page-heading";
@@ -35,7 +38,12 @@ import {
   DecisionForm,
   type DecisionOutcome,
 } from "@/blocks/request/request-actions";
-import { ChangeTable, type ChangeRow } from "@/blocks/request/request-changes";
+import {
+  ChangeTable,
+  writtenChangeRows,
+  writtenFields,
+  type ChangeRow,
+} from "@/blocks/request/request-changes";
 import {
   StateNotice,
   approvedNotApplied,
@@ -51,12 +59,12 @@ import {
 } from "@/blocks/pages/record-attachments";
 import type { DocumentSource } from "@/blocks/documents/document-view";
 import {
-  currentValue,
   fieldOf,
   readableTarget,
   recordTitle,
+  requestRoute,
+  routedRequest,
   useRegister,
-  writtenFields,
   type RegisterEntities,
 } from "@/blocks/pages/record";
 
@@ -91,18 +99,22 @@ function actionDescription(name: string, pages: PagesContent): string {
   return map[name] ?? pages.actionExplanation;
 }
 
-/** An action's label: the app's own wording for its lifecycle action, before the action's own. */
+/**
+ * An action's label: the app's own wording for its lifecycle action, before the
+ * action's own, then the default wording for the lifecycle action, then its
+ * name read as words.
+ */
 function choiceLabel(
   action: RecordActionReference,
   pages: PagesContent,
 ): string {
   const key = action.action ?? action.name;
-  return pages.actionLabels[key] ?? action.label ?? key;
-}
-
-/** Exact, order-sensitive equality: a reordered list is a change. */
-function sameValue(current: unknown, proposed: unknown): boolean {
-  return JSON.stringify(current) === JSON.stringify(proposed);
+  return (
+    pages.actionLabels[key] ??
+    action.label ??
+    pages.lifecycleActionLabels[key] ??
+    humanizeName(key)
+  );
 }
 
 /**
@@ -137,28 +149,16 @@ function changeRows(
   target: RecordView | undefined,
   c: BlockContent,
 ): ChangeRow[] {
-  const written = writtenFields(entities, request.fields);
-  const rows: ChangeRow[] = written.map(({ field, target: targetField }) => {
-    const current = currentValue(targetField, target, view.request);
-    const proposed = view.values[field.id];
-    return {
-      key: targetField.id,
-      label: targetField.label,
-      current:
-        current === undefined ? (
-          <p className="muted">{c.currentUnavailable}</p>
-        ) : (
-          <FieldValue field={targetField} value={current} />
-        ),
-      proposed: <FieldValue field={targetField} value={proposed} />,
-      comparison:
-        current === undefined
-          ? "unknown"
-          : sameValue(current, proposed)
-            ? "unchanged"
-            : "changed",
-    };
-  });
+  const written = writtenFields(
+    { record: entities.record, request },
+    request.fields,
+  );
+  const rows = writtenChangeRows(
+    written,
+    view,
+    target,
+    c.currentUnavailable,
+  );
   if (target)
     for (const field of contextFields(
       entities,
@@ -197,6 +197,26 @@ function RequestRecoveryNotices({
   );
 }
 
+/** The wait before a request awaiting its review result is first read again, in milliseconds. */
+const reviewResultPollMs = 5_000;
+
+/** The longest wait between re-reads: a review can take days, so the poll slows to this and stays. */
+const reviewResultPollCapMs = 60_000;
+
+/**
+ * A submitted request's result arrives from Casework through a delivery, so it is read again
+ * until it does, each wait twice the last.
+ */
+function awaitingReviewResult(
+  view: RecordView | undefined,
+  rereads: number,
+): number | false {
+  return view?.request?.state === "submitted" &&
+    view.request.review?.result.state === "pending"
+    ? backOffInterval(reviewResultPollMs, reviewResultPollCapMs, rereads)
+    : false;
+}
+
 /**
  * The request screen for every role: a reviewer applies an approved request,
  * a holder or registrar tracks their own request. Document order: banner,
@@ -222,6 +242,7 @@ export function RequestDetailPage({
 }) {
   const register = useRegister();
   const shell = useShellContent();
+  const { query } = splitRoute(useRoute());
   if (register.isPending) return <Loading />;
   if (register.error)
     return (
@@ -231,12 +252,13 @@ export function RequestDetailPage({
       />
     );
   const entities = register.entities;
-  if (!entities?.followedRequest)
+  const request = entities?.followedRequest && routedRequest(entities, query);
+  if (!entities || !request)
     return <ErrorPanel error={unavailableError(shell.unavailable)} />;
   return (
     <RequestRead
       entities={entities}
-      request={entities.followedRequest}
+      request={request}
       id={id}
       useTask={useTask}
       useUpload={useUpload}
@@ -268,7 +290,7 @@ function RequestRead({
 }) {
   const pages = usePagesContent(),
     session = useAuthority(),
-    query = useRecord(request.id, id);
+    query = useRecord(request.id, id, undefined, awaitingReviewResult);
   if (query.isPending) return <Loading />;
   if (query.error || !query.data)
     return (
@@ -359,6 +381,46 @@ function ReviewerNote({ entity, id }: { entity: string; id: string }) {
   );
 }
 
+/**
+ * What the reviewer wrote for the request's holder, read by a Casework officer
+ * from the review's own history on their own profile. Casework decides what
+ * the officer may read; a read that fails gets the not-available wording.
+ */
+function OfficerReviewerNote({ reviewId }: { reviewId: string }) {
+  const block = useBlockContent();
+  const history = useReviewHistory(reviewId);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = history;
+  // The note may sit on a later page of the history.
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  if (history.error && !history.data)
+    return <ReviewNotes notes={{ state: "unavailable", notes: [] }} />;
+  if (!history.data || hasNextPage) return <Loading />;
+  const notes = history.data.flatMap((entry) => {
+    const detail = entry.detail;
+    if (
+      entry.kind !== "note" ||
+      !detail ||
+      typeof detail !== "object" ||
+      Array.isArray(detail) ||
+      detail.audience !== "requester" ||
+      typeof detail.note !== "string" ||
+      !detail.note.trim()
+    )
+      return [];
+    return [
+      { eventId: entry.eventId, note: detail.note, occurredAt: entry.occurredAt },
+    ];
+  });
+  return (
+    <ReviewNotes
+      notes={{ state: notes.length ? "available" : "none", notes }}
+      noNote={block.requesterNoNote}
+    />
+  );
+}
+
 function RequestDetail({
   entities,
   request,
@@ -416,7 +478,10 @@ function RequestDetail({
     state === "changes-requested" || result === "changesRequested";
   const rejected = !sentBack && (state === "rejected" || result === "rejected");
 
-  const written = writtenFields(entities, request.fields);
+  const written = writtenFields(
+    { record: entities.record, request },
+    request.fields,
+  );
   const writtenIds = written.map((item) => item.field.id);
   const asked = request.sections
     .flatMap((section) => section.fields)
@@ -485,6 +550,11 @@ function RequestDetail({
           <h2>{sentBack ? pages.revisionReason : pages.rejectionReason}</h2>
           {session.role === "holder" ? (
             <ReviewerNote entity={view.entity} id={view.id} />
+          ) : session.caseworkProfile &&
+            view.request?.review?.submission.requestId ? (
+            <OfficerReviewerNote
+              reviewId={view.request.review.submission.requestId}
+            />
           ) : (
             <p>{block.undisclosedRevisionReason}</p>
           )}
@@ -505,9 +575,7 @@ function RequestDetail({
         </ChangeTable>
       </section>
       <section>
-        <h2>
-          {holder ? block.holderWhyAskedHeading : block.whyAskedHeading}
-        </h2>
+        <h2>{holder ? block.holderWhyAskedHeading : block.whyAskedHeading}</h2>
         {asked.length > 0 && (
           <AnswerList
             items={asked.map((field) => ({
@@ -578,7 +646,11 @@ function RequestDetail({
         header={
           patchAction && (
             <Button
-              render={<a href={`#${routes.editRequest(view.id)}`} />}
+              render={
+                <a
+                  href={`#${requestRoute(entities, routes.editRequest(view.id), request.id)}`}
+                />
+              }
               variant="outline"
             >
               {pages.editDraft}
@@ -601,7 +673,9 @@ function RequestDetail({
         reconcileHref={`#${routes.requests}`}
         renderError={(error) => <ErrorPanel error={error} />}
         refreshing={refreshing}
-        decidedBody={pages.decidedBody}
+        decidedBody={
+          state === "applied" ? pages.decidedAppliedBody : pages.decidedBody
+        }
       />
     </>
   );

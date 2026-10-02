@@ -253,7 +253,7 @@ export function useTaskGrantPanel({
       .then((list) => {
         if (gen !== generation.current) return;
         setRecorded(list.grants.length);
-        setWithheld(null);
+        setWithheld(list.withheld ? id : null);
       })
       .catch((e) => {
         // Not a failure to put in front of an officer who was not asking
@@ -281,6 +281,10 @@ export function useTaskGrantPanel({
         calls.list(),
       ]);
       if (gen !== generation.current) return;
+      if (list.withheld) {
+        setError("unavailable");
+        return;
+      }
       setTemplates(preview.templates);
       setGrants(list.grants);
       setRecorded(list.grants.length);

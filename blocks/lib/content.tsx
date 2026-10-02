@@ -26,6 +26,8 @@ export interface BlockContent {
   // may name its register) reaches these through `blockContentOf`.
   search: string;
   clearSearch: string;
+  /** A filter select's choice that applies no filter. */
+  filterAll: string;
   previous: string;
   next: string;
   page: string;
@@ -90,6 +92,8 @@ export interface BlockContent {
   prefillExpired: string;
   getVerifiedInformation: string;
   revisionNoNote: string;
+  /** What an officer reads when the reviewer left the requester no note. */
+  requesterNoNote: string;
   undisclosedRevisionReason: string;
   attachmentsHeading: string;
   attachmentReadiness: string;
@@ -124,6 +128,25 @@ export interface BlockContent {
   addGroupItem?: string;
   removeGroupItem?: (index: number) => string;
   groupItemLegend?: (index: number) => string;
+  /**
+   * Shown in place of a reference to a record that cannot be read or named.
+   * Optional for the same reason; the reference value falls back to its own
+   * default wording.
+   */
+  referenceUnavailable?: string;
+  /** Under a reference picker that found no record to offer. */
+  referenceNoMatch?: string;
+  /** Under a reference picker whose records could not be read. */
+  referenceLoadFailed?: string;
+  /** The button that clears a chosen record so another can be picked. */
+  referenceChange?: string;
+  /** The first option of a reference picker that lists records to choose from. */
+  referenceChoose?: string;
+  /**
+   * Under a reference field whose records this session cannot list: the
+   * record's identifier is typed and the registry checks it.
+   */
+  referenceTyped?: string;
 }
 
 export const blockContent: BlockContent = {
@@ -141,6 +164,7 @@ export const blockContent: BlockContent = {
 
   search: "Search",
   clearSearch: "Clear search",
+  filterAll: "All",
   previous: "Previous",
   next: "Next",
   page: "Page",
@@ -207,6 +231,7 @@ export const blockContent: BlockContent = {
     "This verified answer has expired. Request it again or enter your answer yourself.",
   getVerifiedInformation: "Get verified information",
   revisionNoNote: "The reviewer did not leave a note for you.",
+  requesterNoNote: "The reviewer did not leave a note for the requester.",
   undisclosedRevisionReason: "The reviewer reason is not available to this account.",
   attachmentsHeading: "Supporting documents",
   attachmentReadiness: "{ready} of {total} required documents ready",
@@ -241,6 +266,13 @@ export const blockContent: BlockContent = {
   addGroupItem: "Add item",
   removeGroupItem: (index) => `Remove item ${index}`,
   groupItemLegend: (index) => `Item ${index}`,
+  referenceUnavailable: "A record that could not be read",
+  referenceNoMatch: "No matching records",
+  referenceLoadFailed: "The records could not be read",
+  referenceChange: "Choose a different record",
+  referenceChoose: "Choose a record",
+  referenceTyped:
+    "This account cannot list these records. Enter the identifier of the record; the registry checks it.",
 };
 
 const BlockContentContext = createContext<BlockContent>(blockContent);

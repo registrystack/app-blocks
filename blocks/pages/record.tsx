@@ -1,13 +1,12 @@
+import type { ReactNode } from "react";
 import {
   entityTitle,
   unavailableError,
-  validateValues,
   type EntityModel,
   type FieldModel,
   type JsonValue,
   type RecordView,
   type RequestView,
-  type ValueIssue,
 } from "@registrystack/app-runtime";
 import {
   useModel,
@@ -15,13 +14,15 @@ import {
   type RecoveryReference,
 } from "@registrystack/app-runtime/react";
 import { Button } from "@/components/ui/button";
-import { useBlockContent, type BlockContent } from "@/blocks/lib/content";
+import { useBlockContent } from "@/blocks/lib/content";
 import { Notice } from "@/blocks/lib/notice";
 import { ErrorPanel } from "@/blocks/shell/error-panel";
+import { Loading } from "@/blocks/shell/loading";
 import { useShellContent } from "@/blocks/shell/shell-content";
 import { navigate, useRoute } from "@/blocks/shell/routing";
 import {
   useRegisterRoutes,
+  type EntityRoutes,
   type RegisterRoutes,
 } from "@/blocks/pages/register-routes";
 import { usePagesContent } from "@/blocks/pages/pages-content";
@@ -43,6 +44,10 @@ export interface RegisterEntities {
    * the records they change sees that request target none of them.
    */
   followedRequest?: EntityModel;
+  /** Every record entity the session reads, the register's own among them. */
+  records?: readonly EntityModel[];
+  /** Every request entity the model names, `request` and `followedRequest` among them. */
+  requests?: readonly EntityModel[];
 }
 
 /** The record and request entities of a session model, or null when it has no record entity. */
@@ -63,7 +68,74 @@ export function registerEntities(
     request,
     followedRequest:
       request ?? (requests.length === 1 ? requests[0] : undefined),
+    records,
+    requests,
   };
+}
+
+/** The request entities whose requests change a record of `entity`, in the model's order. */
+export function requestsTargeting(
+  entities: RegisterEntities,
+  entity: string,
+): readonly EntityModel[] {
+  const requests =
+    entities.requests ?? (entities.request ? [entities.request] : []);
+  return requests.filter((request) =>
+    request.request?.targets.some((target) => target.entity === entity),
+  );
+}
+
+/** The query parameter that names the request entity a request route is about. */
+const REQUEST_PARAM = "request";
+
+/**
+ * `path` for a request of `request`: the followed entity's requests keep the
+ * plain path, any other names its entity in the query, so one set of request
+ * routes serves every request entity.
+ */
+export function requestRoute(
+  entities: RegisterEntities,
+  path: string,
+  request: string,
+): string {
+  return request === entities.followedRequest?.id
+    ? path
+    : `${path}?${REQUEST_PARAM}=${encodeURIComponent(request)}`;
+}
+
+/** The request entity a request route names in its query, else the followed one. */
+export function routedRequest(
+  entities: RegisterEntities,
+  query: URLSearchParams,
+): EntityModel | undefined {
+  const named = query.get(REQUEST_PARAM);
+  return (
+    entities.requests?.find((request) => request.id === named) ??
+    entities.followedRequest
+  );
+}
+
+/**
+ * The entities a work item reads under: the request entity it names, with
+ * the record that request targets. An item that names no entity reads under
+ * the session's request; one naming an entity the model lacks has no request.
+ */
+export function workItemEntities(
+  entities: EntityModel[],
+  sourceEntity: string | undefined,
+): RegisterEntities | null {
+  const register = registerEntities(entities);
+  if (!register || sourceEntity === undefined) return register;
+  const request = entities.find(
+    (entity) => entity.kind === "request" && entity.id === sourceEntity,
+  );
+  const record =
+    entities.find(
+      (entity) =>
+        entity.kind === "record" &&
+        request?.request?.targets.some((target) => target.entity === entity.id),
+    ) ?? register.record;
+  return { ...register, record, request };
 }
 
 /** The session model's register entities; `entities` is null until read, or when absent. */
@@ -76,8 +148,32 @@ export function useRegister() {
 }
 
 /**
- * The route a record opens on: a request on its request page, a register
- * record on its record page, and null for an entity this app has no page for.
+ * The routes of one record entity: the register's own record entity keeps the
+ * register's routes, any other the app's `entity` routes. Null for an entity
+ * the session reads no records of, or where the app names no routes for it.
+ */
+export function entityRoutes(
+  routes: RegisterRoutes,
+  entities: RegisterEntities,
+  entity: string,
+): EntityRoutes | null {
+  if (entity === entities.record.id)
+    return {
+      records: routes.records,
+      createRecord: routes.createRecord,
+      record: routes.record,
+      recordAction: routes.recordAction,
+      action: routes.action,
+    };
+  if (!entities.records?.some((item) => item.id === entity)) return null;
+  return routes.entity?.(entity) ?? null;
+}
+
+/**
+ * The route a record opens on: a request on its request page (naming its
+ * request entity unless it is the followed one), a record of any
+ * record entity on that entity's record page, and null for an entity this app
+ * has no page for.
  */
 export function recordPath(
   routes: RegisterRoutes,
@@ -85,32 +181,58 @@ export function recordPath(
   entity: string,
   id: string,
 ): string | null {
-  if (entity === entities.followedRequest?.id) return routes.request(id);
-  if (entity === entities.record.id) return routes.record(id);
-  return null;
-}
-
-/** One field a request writes, with the target field it lands in. */
-export interface WrittenField {
-  field: FieldModel;
-  target: FieldModel;
+  if (
+    entity === entities.followedRequest?.id ||
+    (entities.followedRequest &&
+      entities.requests?.some((request) => request.id === entity))
+  )
+    return requestRoute(entities, routes.request(id), entity);
+  return entityRoutes(routes, entities, entity)?.record(id) ?? null;
 }
 
 /**
- * The fields a request writes on its target record, in the order the request
- * model names them. A write whose field either model lacks is left out.
+ * The register's entities and one record entity of the page's own: the
+ * register's record entity when `entityId` is left out, else the record entity
+ * the model names. `entity` is undefined where the model has no such entity.
  */
-export function writtenFields(
-  entities: RegisterEntities,
-  requestFields: readonly FieldModel[],
-): WrittenField[] {
-  return (entities.request?.request?.writes ?? []).flatMap((write) => {
-    const field = requestFields.find((item) => item.id === write.requestField);
-    const target = fieldOf(entities.record, write.targetField);
-    return write.targetEntity === entities.record.id && field && target
-      ? [{ field, target }]
-      : [];
-  });
+export function useRecordEntity(entityId?: string) {
+  const register = useRegister();
+  const entities = register.entities;
+  const entity = !entities
+    ? undefined
+    : entityId === undefined
+      ? entities.record
+      : entities.records?.find((item) => item.id === entityId);
+  return { ...register, entity };
+}
+
+/**
+ * The gate every record page stands behind: loading while the model is read,
+ * a refusal with a retry when it cannot be, and the unavailable refusal for
+ * an entity it does not carry. Once through, `children` gets the register's
+ * entities and the page's own entity.
+ */
+export function RecordEntityGate({
+  entity: entityId,
+  children,
+}: {
+  /** The page's entity id; the register's own record entity when left out. */
+  entity?: string;
+  children: (entities: RegisterEntities, entity: EntityModel) => ReactNode;
+}) {
+  const register = useRecordEntity(entityId);
+  const shell = useShellContent();
+  if (register.isPending) return <Loading />;
+  if (register.error || !register.entities)
+    return (
+      <ErrorPanel
+        error={register.error}
+        retry={() => void register.refetch()}
+      />
+    );
+  if (!register.entity)
+    return <ErrorPanel error={unavailableError(shell.unavailable)} />;
+  return <>{children(register.entities, register.entity)}</>;
 }
 
 /**
@@ -130,22 +252,6 @@ export function readableTarget(
     : "";
 }
 
-/**
- * What a target field holds now: the live target record when it was read,
- * else the value the request retained, unless the host marked the target
- * unavailable. Undefined where neither is known.
- */
-export function currentValue(
-  targetField: FieldModel,
-  target: RecordView | undefined,
-  request: RequestView | undefined,
-): JsonValue | undefined {
-  if (target) return target.values[targetField.id];
-  return request?.target?.available === false
-    ? undefined
-    : request?.previous?.[targetField.id];
-}
-
 /** Whether two values are the same answer; a list is the same in any order. */
 export function sameAnswer(
   left: JsonValue | undefined,
@@ -157,26 +263,6 @@ export function sameAnswer(
       JSON.stringify(right.map((item) => JSON.stringify(item)).sort())
     );
   return JSON.stringify(left) === JSON.stringify(right);
-}
-
-/**
- * What an answer check says about one field: the content's wording for that
- * field first, then the wording for the kind of problem, then the registry's
- * own message for a rule.
- */
-export function issueMessage(
-  field: FieldModel,
-  issue: Pick<ValueIssue, "code" | "message">,
-  c: BlockContent,
-): string {
-  return (
-    c.fieldErrors[field.id] ??
-    (issue.code === "required"
-      ? c.requiredError
-      : issue.code === "format" && field.format === "date"
-        ? c.dateError
-        : (issue.message ?? c.invalidError))
-  );
 }
 
 export function fieldOf(
@@ -204,40 +290,6 @@ export function useOptionLabel(): (field: FieldModel, code: string) => string {
     c.terms[code] ??
     field.options?.find((option) => option.value === code)?.label ??
     code;
-}
-
-/**
- * What a check of these answers finds, one message per field: the registry's
- * rules and schema, and a required list left empty or holding a value its
- * field does not offer.
- */
-export function valueErrors(
-  fields: readonly FieldModel[],
-  values: Readonly<Record<string, JsonValue>>,
-  rules: EntityModel["rules"],
-  c: BlockContent,
-): Record<string, string> {
-  const next: Record<string, string> = {};
-  for (const issue of validateValues(fields, values, rules)) {
-    const field = fields.find((item) => item.id === issue.field);
-    if (field && !next[field.id])
-      next[field.id] = issueMessage(field, issue, c);
-  }
-  for (const field of fields) {
-    const value = values[field.id];
-    if (next[field.id] || field.type !== "array") continue;
-    if (field.required && (!Array.isArray(value) || value.length === 0))
-      next[field.id] = issueMessage(field, { code: "required" }, c);
-    else if (
-      field.options &&
-      Array.isArray(value) &&
-      value.some(
-        (item) => !field.options!.some((option) => option.value === item),
-      )
-    )
-      next[field.id] = issueMessage(field, { code: "enum" }, c);
-  }
-  return next;
 }
 
 /** The refusal shown where the session is offered no write for this request. */

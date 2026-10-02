@@ -398,7 +398,8 @@ main:focus {
   gap: 1.5rem;
   margin-block-end: 2rem;
 }
-.page-heading > [data-slot="button"] {
+.page-heading > [data-slot="button"],
+.page-heading > .actions {
   margin-block-start: 0.6rem;
 }
 .page-heading .badge {
@@ -1119,6 +1120,32 @@ footer {
 }
 .value-list li {
   margin-bottom: 0.25rem;
+}
+/* A reference picker's matches: one bordered list of records to choose from. */
+.reference-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.reference-options:not(:empty) {
+  border: 1px solid var(--border);
+  border-top: 0;
+}
+.reference-options li + li {
+  border-top: 1px solid var(--border);
+}
+.reference-options button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.6rem 0.65rem;
+  border: 0;
+  background: var(--background);
+  font: inherit;
+  text-align: left;
+}
+.reference-options button:hover {
+  background: var(--panel-hover);
 }
 .value-object {
   margin: 0.5rem 0 1rem;

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Search } from "lucide-react";
+import type { EntityModel } from "@registrystack/app-runtime";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useBlockContent } from "@/blocks/lib/content";
@@ -25,6 +26,7 @@ export function RecordSearchForm({
 }) {
   const c = useBlockContent();
   const [search, setSearch] = useState(applied);
+  const inputId = useId();
   return (
     <form
       className="search-form"
@@ -34,9 +36,9 @@ export function RecordSearchForm({
       }}
     >
       <div>
-        <label htmlFor="identifier-search">{label}</label>
+        <label htmlFor={inputId}>{label}</label>
         <Input
-          id="identifier-search"
+          id={inputId}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={hint}
@@ -58,5 +60,83 @@ export function RecordSearchForm({
         </Button>
       )}
     </form>
+  );
+}
+
+/** The choice that selects a record where the field is empty, in a filter select. */
+const EMPTY_CHOICE = "empty";
+const VALUE_PREFIX = "value:";
+
+/**
+ * One select per filter field that offers options, each narrowing the list as
+ * soon as a choice is made. A nullable field with an empty label also offers
+ * the records where it is empty, worded by that label. `applied` maps a field
+ * id to its chosen value, or null for "empty"; `onChange` gets the field and
+ * its new value, undefined when the choice applies no filter. `allLabel` words
+ * that choice, `BlockContent.filterAll` by default.
+ */
+export function RecordFilterBar({
+  entity,
+  applied,
+  onChange,
+  allLabel,
+}: {
+  entity: EntityModel;
+  applied: Readonly<Record<string, string | null>>;
+  onChange: (field: string, value: string | null | undefined) => void;
+  allLabel?: string;
+}) {
+  const c = useBlockContent();
+  const selects = entity.list.filters.flatMap((filter) => {
+    const field = entity.fields.find((item) => item.id === filter.field);
+    return field?.options?.length ? [{ filter, field }] : [];
+  });
+  if (selects.length === 0) return null;
+  return (
+    <div className="filter-bar">
+      {selects.map(({ filter, field }) => {
+        const current = applied[field.id];
+        const value =
+          current === null
+            ? EMPTY_CHOICE
+            : current === undefined
+              ? ""
+              : `${VALUE_PREFIX}${current}`;
+        const id = `filter-${field.id}`;
+        return (
+          <div key={field.id}>
+            <label htmlFor={id}>{filter.label}</label>
+            <select
+              id={id}
+              value={value}
+              onChange={(e) => {
+                const next = e.target.value;
+                onChange(
+                  field.id,
+                  next === ""
+                    ? undefined
+                    : next === EMPTY_CHOICE
+                      ? null
+                      : next.slice(VALUE_PREFIX.length),
+                );
+              }}
+            >
+              <option value="">{allLabel ?? c.filterAll}</option>
+              {field.nullable && field.emptyLabel && (
+                <option value={EMPTY_CHOICE}>{field.emptyLabel}</option>
+              )}
+              {field.options!.map((option) => (
+                <option
+                  key={option.value}
+                  value={`${VALUE_PREFIX}${option.value}`}
+                >
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      })}
+    </div>
   );
 }

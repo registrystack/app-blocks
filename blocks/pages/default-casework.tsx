@@ -21,7 +21,7 @@ import {
   useRecordUpload,
 } from "@/blocks/pages/default-tasks";
 import { usePagesContent } from "@/blocks/pages/pages-content";
-import { useRegister } from "@/blocks/pages/record";
+import { useRegister, workItemEntities } from "@/blocks/pages/record";
 import { splitRoute, useRoute } from "@/blocks/shell/routing";
 
 /**
@@ -53,15 +53,20 @@ export function WorkItemPendingNotice() {
  */
 export type TaskHeading = (item: CaseworkWorkItem) => string;
 
-/** The request, by the label the session model gives it, as every item's task. */
+/** Each item's request, by the label the session model gives its entity, as the item's task. */
 function ModelTaskHeading({
   page,
 }: {
   page: (heading: TaskHeading) => ReactNode;
 }) {
   const pages = usePagesContent();
-  const label = useRegister().entities?.request?.label ?? pages.requestTitle;
-  return page(() => label);
+  const model = useRegister().data;
+  return page(
+    (item) =>
+      (model &&
+        workItemEntities(model.entities, item.sourceEntity)?.request?.label) ??
+      pages.requestTitle,
+  );
 }
 
 /** Renders `page` with the app's own heading, or the model's when it gives none. */

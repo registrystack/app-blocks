@@ -1,14 +1,20 @@
 import { useEffect, useState } from "react";
 
+// The root route where there is no location to read, as when a page renders
+// to markup on a server.
+function currentRoute(): string {
+  return typeof location === "undefined" ? "/" : location.hash.slice(1) || "/";
+}
+
 /**
  * Hash-based client-side routing. The URL's hash is the only source of
  * truth for which page is shown; a block reads it through `useRoute` and
  * moves it through `navigate`, and never touches `location` directly.
  */
 export function useRoute(): string {
-  const [route, setRoute] = useState(() => location.hash.slice(1) || "/");
+  const [route, setRoute] = useState(currentRoute);
   useEffect(() => {
-    const update = () => setRoute(location.hash.slice(1) || "/");
+    const update = () => setRoute(currentRoute());
     window.addEventListener("hashchange", update);
     return () => window.removeEventListener("hashchange", update);
   }, []);

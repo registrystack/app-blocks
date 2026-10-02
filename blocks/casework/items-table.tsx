@@ -46,6 +46,13 @@ export interface CaseworkItemsTableProps {
   heading: (item: CaseworkWorkItem) => ReactNode;
   /** Where the item's reference links to. The table assumes no router of its own. */
   itemHref: (id: string) => string;
+  /**
+   * Where a review task's page is. A row whose item carries a review task gets
+   * a link there in its own cell; without it the table shows no such column.
+   * Given, the column shows on every page, so it does not come and go as the
+   * officer pages through.
+   */
+  reviewHref?: (taskId: string) => string;
   /** Adds a checkbox column, a colleague can select rows to act on together. */
   selectable?: boolean;
   selected?: ReadonlySet<string>;
@@ -83,6 +90,7 @@ export function CaseworkItemsTable({
   caption,
   heading,
   itemHref,
+  reviewHref,
   selectable = false,
   selected,
   onSelectedChange,
@@ -105,6 +113,7 @@ export function CaseworkItemsTable({
       </Empty>
     );
   }
+  const reviewLinks = reviewHref !== undefined;
   const allSelected =
     selectable && items.length > 0 && (selected?.size ?? 0) === items.length;
   const someSelected = selectable && !allSelected && (selected?.size ?? 0) > 0;
@@ -146,6 +155,7 @@ export function CaseworkItemsTable({
             <TableHead>{c.waitingColumn}</TableHead>
             <TableHead>{c.holderColumn}</TableHead>
             <TableHead>{c.stageFilterLabel}</TableHead>
+            {reviewLinks && <TableHead>{c.actionsColumn}</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -206,6 +216,21 @@ export function CaseworkItemsTable({
                     labelKeys={workItemStateKeys(item)}
                   />
                 </TableCell>
+                {reviewLinks && (
+                  <TableCell>
+                    {item.reviewTask && (
+                      <a
+                        className="row-link"
+                        aria-label={c.openReviewFor(
+                          caseworkReference(item, c),
+                        )}
+                        href={reviewHref(item.reviewTask.taskId)}
+                      >
+                        {c.openReview}
+                      </a>
+                    )}
+                  </TableCell>
+                )}
               </TableRow>
             );
           })}

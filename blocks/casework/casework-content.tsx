@@ -33,6 +33,12 @@ export interface CaseworkContent {
   refColumn: string;
   /** The items table's column naming who holds an item. */
   holderColumn: string;
+  /** The items table's column holding what an officer can open from a row. */
+  actionsColumn: string;
+  /** The link from an item to the review of its request. */
+  openReview: string;
+  /** The link's name for assistive technology: "Open review for {reference}". */
+  openReviewFor: (reference: string) => string;
   /** The items table's column naming an item's stage. */
   stageFilterLabel: string;
   /** The marker shown beside the task when an item carries a return note. */
@@ -84,8 +90,6 @@ export interface CaseworkContent {
   contextEmpty: string;
   /** Shown when the record behind a BREG subject could not be read. */
   recordUnavailable: string;
-  /** Shown in place of a submitted value that names a record this officer cannot read. */
-  referenceUnavailable: string;
   /** The task's policy, named for the record: `Review policy {id}, version {version}`. */
   policyLine: string;
   /** Closes a dialog or a drawer, read by assistive technology. */
@@ -622,6 +626,9 @@ export const caseworkContent: Required<CaseworkContent> = {
   waitingColumn: "Waiting",
   refColumn: "Ref",
   holderColumn: "Holder",
+  actionsColumn: "Actions",
+  openReview: "Open review",
+  openReviewFor: (reference: string) => `Open review for ${reference}`,
   stageFilterLabel: "Stage",
   returned: "Returned",
   caseworkReturned: "This item came back with a note.",
@@ -654,7 +661,6 @@ export const caseworkContent: Required<CaseworkContent> = {
     "The source record changed after this request was submitted.",
   contextEmpty: "The request carries nothing to show here.",
   recordUnavailable: "The record behind this task could not be read.",
-  referenceUnavailable: "A record that could not be read",
   policyLine: "Review policy {id}, version {version}",
   close: "Close",
   shortcutsTitle: "Keyboard shortcuts",

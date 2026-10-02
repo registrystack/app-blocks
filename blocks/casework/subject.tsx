@@ -1,6 +1,5 @@
 import type {
   EntityModel,
-  FieldModel,
   JsonSchema,
   RegistryModel,
   ReviewJson,
@@ -8,7 +7,6 @@ import type {
 } from "@registrystack/app-runtime";
 import {
   bregReviewSubjectSource,
-  entityTitle,
   fieldsFromJsonSchema,
   reviewShownValues,
   reviewSubjectEntity,
@@ -18,6 +16,7 @@ import {
 } from "@registrystack/app-runtime";
 import { useModel, useRecord } from "@registrystack/app-runtime/react";
 import { FieldValue } from "@/blocks/fields/field-value";
+import { recordTitle } from "@/blocks/fields/reference-value";
 import { Loading, Notice } from "@/blocks/casework/shared";
 import { useCaseworkContent } from "@/blocks/casework/casework-content";
 
@@ -28,9 +27,9 @@ import { useCaseworkContent } from "@/blocks/casework/casework-content";
  * through the review kind's own display schema. A request of the register
  * reads those values under the model's own labels, option words and item
  * fields, and a value that names a register record reads as that record's
- * title. Given no model, only `BregSubject` calls `useModel`, and only a
- * register subject calls `useRecord`: a host with no BREG never mounts
- * either, so it never needs the model or record routes.
+ * title (`ReferenceValue`). Given no model, only `BregSubject` calls
+ * `useModel`, and only a register subject calls `useRecord`: a host with no
+ * BREG never mounts either, so it never needs the model or record routes.
  */
 
 /** The display schema as an object schema, whatever shape a policy served it in. */
@@ -40,53 +39,12 @@ function asObjectSchema(value: ReviewJson): JsonSchema {
     : {};
 }
 
-/** A record's title: its entity's title template or field, as a record page titles it. */
-function titleOf(
-  entity: EntityModel,
-  values: Readonly<Record<string, unknown>>,
-): string | undefined {
-  return entityTitle(entity, (field) => values[field.id]);
-}
-
-/** A register record a submitted value names, read as its title. */
-function ReferencedRecord({ entity, id }: { entity: EntityModel; id: string }) {
-  const c = useCaseworkContent();
-  const record = useRecord(entity.id, id);
-  if (record.isPending) return <Loading />;
-  if (record.error || !record.data) return <>{c.referenceUnavailable}</>;
-  return <>{titleOf(entity, record.data.values) ?? entity.label}</>;
-}
-
-/** One value of the subject; one that names a register record reads as that record. */
-function SubjectValue({
-  field,
-  value,
-  model,
-}: {
-  field: FieldModel;
-  value: ReviewJson | undefined;
-  model?: RegistryModel;
-}) {
-  const c = useCaseworkContent();
-  if (field.reference && model && typeof value === "string" && value !== "") {
-    const entity = model.entities.find((e) => e.id === field.reference?.entity);
-    return entity ? (
-      <ReferencedRecord entity={entity} id={value} />
-    ) : (
-      <>{c.referenceUnavailable}</>
-    );
-  }
-  return <FieldValue field={field} value={value} />;
-}
-
 function SchemaSubject({
   task,
   entity,
-  model,
 }: {
   task: ReviewTaskDetail;
   entity?: EntityModel;
-  model?: RegistryModel;
 }) {
   const c = useCaseworkContent();
   // The register's own field, where it has one by the same API name, carries
@@ -105,11 +63,7 @@ function SchemaSubject({
         <div key={field.id}>
           <dt>{field.label}</dt>
           <dd>
-            <SubjectValue
-              field={field}
-              value={shown[field.apiName]}
-              model={model}
-            />
+            <FieldValue field={field} value={shown[field.apiName]} />
           </dd>
         </div>
       ))}
@@ -120,11 +74,9 @@ function SchemaSubject({
 function BregRecordSubject({
   entity,
   subjectId,
-  model,
 }: {
   entity: EntityModel;
   subjectId: string;
-  model: RegistryModel;
 }) {
   const c = useCaseworkContent();
   const record = useRecord(entity.id, subjectId);
@@ -139,7 +91,7 @@ function BregRecordSubject({
         <div key={field.id}>
           <dt>{field.label}</dt>
           <dd>
-            <SubjectValue field={field} value={values[field.id]} model={model} />
+            <FieldValue field={field} value={values[field.id]} />
           </dd>
         </div>
       ))}
@@ -157,12 +109,8 @@ function RegisterSubject({
 }) {
   const entity = reviewSubjectEntity(task.subject, model);
   if (entity?.kind === "record")
-    return (
-      <BregRecordSubject entity={entity} subjectId={task.subject.id} model={model} />
-    );
-  return (
-    <SchemaSubject task={task} entity={entity} model={entity ? model : undefined} />
-  );
+    return <BregRecordSubject entity={entity} subjectId={task.subject.id} />;
+  return <SchemaSubject task={task} entity={entity} />;
 }
 
 function BregSubject({ task }: { task: ReviewTaskDetail }) {
@@ -229,7 +177,7 @@ export function useSubjectReference(
       : undefined;
   const title =
     targetEntity && record.data
-      ? titleOf(targetEntity, record.data.values)
+      ? recordTitle(targetEntity, record.data.values)
       : undefined;
   const reference = fromRegister
     ? (displayReference ??

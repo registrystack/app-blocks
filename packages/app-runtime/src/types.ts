@@ -1,4 +1,5 @@
 import type { CaseworkStaffingActionReference } from "./casework-staffing-types.js";
+import type { ReviewTaskLink } from "./review-types.js";
 
 export interface AuthenticatedSession {
   authenticated: true;
@@ -77,6 +78,11 @@ export interface CaseworkWorkItem {
   revision: string;
   bindingReference: string;
   sourceRequestId: string;
+  /**
+   * The request entity the item reviews, so a register with more than one
+   * request entity labels and reads each item under its own.
+   */
+  sourceEntity?: string;
   activity: "review" | "apply";
   state: string;
   queue: string;
@@ -98,6 +104,12 @@ export interface CaseworkWorkItem {
    */
   reference?: string | null;
   supportingReference?: string | null;
+  /**
+   * The review task of the request this item concerns, when the caller's own
+   * registry and Casework profiles can both see it. The host joins it; it
+   * never grants the review, which Casework still decides on every write.
+   */
+  reviewTask?: ReviewTaskLink | null;
   /** Why this item is in front of the officer, read from the observed event. */
   routing?: CaseworkRouting | null;
   /** The assignment context safe to display. These references never authorize an action. */
@@ -381,4 +393,6 @@ export interface HostProblem {
   message: string;
   fieldErrors?: Record<string, string>;
   supportReference?: string;
+  /** The message is the registry's own wording of a refused write, so page copy. */
+  worded?: true;
 }

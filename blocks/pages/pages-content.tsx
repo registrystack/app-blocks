@@ -1,4 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react";
+import { fill } from "@/blocks/lib/format";
 
 /**
  * The words the record and request pages show on their own: generic
@@ -21,10 +22,20 @@ export interface PagesContent {
   noOwnRecordsBody: string;
   noSearchResults: string;
   noStaffRecordsBody: string;
+  /**
+   * The search box of an entity that searches several fields at once. The
+   * registry matches capitals exactly, so the default says so.
+   */
+  searchWordsHint: string;
+  /** A filter select's choice that applies no filter. */
+  filterAll: string;
+  /** The create button of a record entity beside the register's own; `{label}` is the entity's singular label. */
+  addRecord: string;
 
   // Record detail: the record's own notice, its history and its requests.
   backToRecords: string;
   requestChange: string;
+  requestChangeOf: string;
   recordNotice: string;
   historyHeading: string;
   historyGapTitle: string;
@@ -32,6 +43,14 @@ export interface PagesContent {
   recordRequestsHeading: string;
   recordRequestsNote: string;
   recordRequestsEmpty: string;
+  /** The back link of a record entity beside the register's own; `{label}` is its plural label. */
+  backToList: string;
+  /** Shown in a related records section with no record and nothing to add. */
+  relatedEmpty: string;
+  /** Between a revision's new value and the value it replaced. */
+  historyWas: string;
+  historyUnchanged: string;
+  historyNone: string;
 
   // Creating a record.
   createTitle: string;
@@ -39,6 +58,12 @@ export interface PagesContent {
   createSubmit: string;
   required: string;
   cancel: string;
+
+  // A governed action's form: the action's own label is its heading.
+  actionDescription: string;
+  actionSubmit: string;
+  /** What the button that leaves a confirmed write says when the write was opened from another page. */
+  continueAfterWrite: string;
 
   // The change request form: the before/after comparison, checking and saving.
   changeFormTitle: string;
@@ -90,6 +115,8 @@ export interface PagesContent {
   holderActionsHeading: string;
   holderActionsHint: string;
   decidedBody: string;
+  /** Shown in place of `decidedBody` once the server reports the request applied. */
+  decidedAppliedBody: string;
   applyApproved: string;
   applyApprovedHint: string;
   unnamedRequest: string;
@@ -103,6 +130,8 @@ export interface PagesContent {
   reviewOperatorAttentionBodies: Readonly<Record<string, string>>;
   /** A request action's label, by its lifecycle action, before the action's own. */
   actionLabels: Readonly<Record<string, string>>;
+  /** A lifecycle action's label, by action, where neither `actionLabels` nor the action names it. */
+  lifecycleActionLabels: Readonly<Record<string, string>>;
   /** Shown where a holder's session finds this request unavailable. */
   requestUnavailable: string;
 
@@ -164,9 +193,13 @@ export const pagesContent: PagesContent = {
   noSearchResults:
     "No matching record was found. Check the identifier or clear the filter.",
   noStaffRecordsBody: "Records you are allowed to inspect will appear here.",
+  searchWordsHint: "Enter words to search for. Capitals count.",
+  filterAll: "All",
+  addRecord: "Add {label}",
 
   backToRecords: "Back to records",
   requestChange: "Request a change",
+  requestChangeOf: "Request {label}",
   recordNotice:
     "These are recorded facts, not a determination of current standing.",
   historyHeading: "History",
@@ -177,6 +210,11 @@ export const pagesContent: PagesContent = {
   recordRequestsNote:
     "Requests for this record are shown in the registry's default order.",
   recordRequestsEmpty: "There are no requests for this record.",
+  backToList: "Back to {label}",
+  relatedEmpty: "None recorded.",
+  historyWas: "was",
+  historyUnchanged: "No recorded value changed.",
+  historyNone: "No earlier states are recorded.",
 
   createTitle: "Create a record",
   createDescription:
@@ -184,6 +222,11 @@ export const pagesContent: PagesContent = {
   createSubmit: "Create record",
   required: "All fields are required unless marked optional.",
   cancel: "Cancel",
+
+  actionDescription:
+    "Enter what this action asks for. The registry checks your answers and makes the change only once it accepts them.",
+  actionSubmit: "Submit",
+  continueAfterWrite: "Continue",
 
   changeFormTitle: "Request a change",
   changeFormDescription:
@@ -251,6 +294,8 @@ export const pagesContent: PagesContent = {
   holderActionsHint: "Choose what to do with your request.",
   decidedBody:
     "The request has been updated. The record changes only when an approved change is applied.",
+  decidedAppliedBody:
+    "The request has been applied. The record now holds the change.",
   applyApproved: "Apply approved request",
   applyApprovedHint:
     "Approval is complete. Apply the request to update the record.",
@@ -266,6 +311,13 @@ export const pagesContent: PagesContent = {
     "Automatic review recovery stopped. An operator must reconcile this request before it continues.",
   reviewOperatorAttentionBodies: {},
   actionLabels: {},
+  lifecycleActionLabels: {
+    submit: "Submit request",
+    cancel: "Cancel request",
+    revise: "Revise request",
+    rebase: "Review against latest record",
+    apply: "Apply approved change",
+  },
   requestUnavailable: "This request is unavailable",
 
   recoveryBody:
@@ -350,4 +402,27 @@ export function listTitle(
   pluralLabel: string,
 ): string {
   return pages[key] === pagesContent[key] ? pluralLabel : pages[key];
+}
+
+/**
+ * A create control's words: the app's own where its content words them,
+ * otherwise the model's words for the create (its label, or the words under
+ * the create page's heading), otherwise the generic default. Words the app
+ * sets to the default's own read as unset, as in `listTitle`.
+ */
+export function createWords(
+  pages: PagesContent,
+  key:
+    | "createRecord"
+    | "createTitle"
+    | "addRecord"
+    | "createSubmit"
+    | "createDescription"
+    | "requestChangeOf",
+  served: string | undefined,
+  entityLabel: string,
+): string {
+  return pages[key] === pagesContent[key] && served
+    ? served
+    : fill(pages[key], { label: entityLabel });
 }

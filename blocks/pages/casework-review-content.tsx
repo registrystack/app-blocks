@@ -14,9 +14,11 @@ export interface ReviewPageContent {
   queueCaption: string;
   queueEmpty: string;
   queueReference: string;
+  /** Names a task in the queue by the request it reviews: "Review {reference}". */
+  queueRowReference: string;
   /**
-   * Names a task in the queue by its place in the list: "Review task {number}".
-   * A queue row carries no subject, so nothing it serves names the task.
+   * Names a task in the queue by its place in the list: "Review task {number}",
+   * when the host could not name the request it reviews.
    */
   queueRowName: string;
   queueQueue: string;
@@ -46,6 +48,7 @@ export const reviewPageEnglish: ReviewPageContent = {
   queueCaption: "Review tasks you can see",
   queueEmpty: "No review tasks are waiting.",
   queueReference: "Review task",
+  queueRowReference: "Review {reference}",
   queueRowName: "Review task {number}",
   queueQueue: "Queue",
   queueStatus: "Status",

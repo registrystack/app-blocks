@@ -23,12 +23,30 @@ export interface RegistryModel {
   /** Every language the UI model offers. */
   languages: string[];
   entities: EntityModel[];
+  /**
+   * The record entities a staff app offers as places, in order; every record
+   * entity the session reads when absent.
+   */
+  places?: string[];
+  /** The list a session opens on, when the UI model names one for its role. */
+  home?: HomeView;
+}
+
+/**
+ * One entity's list, narrowed by field: a string matches the field's value
+ * exactly, and null matches a record where the field is empty.
+ */
+export interface HomeView {
+  entity: string;
+  filters?: Record<string, string | null>;
 }
 
 export interface EntityModel {
   id: string;
   label: string;
   pluralLabel: string;
+  /** The words under the heading of a page that creates one of these records. */
+  createDescription?: string;
   /** A request entity changes other records through its declared effects. */
   kind: "record" | "request";
   fields: FieldModel[];
@@ -43,6 +61,11 @@ export interface EntityModel {
   list: {
     columns: string[];
     filters: { field: string; label: string }[];
+    /**
+     * The fields one search box matches, each by containing the words
+     * searched for; absent where the registry serves no such search.
+     */
+    search?: string[];
     pageSize: number;
   };
   /**
@@ -52,6 +75,8 @@ export interface EntityModel {
   context?: string[];
   operations: {
     create?: boolean;
+    /** The session may list the entity's records, so a reference to one can be picked. */
+    list?: boolean;
     patch?: boolean;
     revisions?: boolean;
     attachments?: { slot: string; label: string }[];
@@ -63,7 +88,8 @@ export interface EntityModel {
 
 /**
  * The JSON Schema type a field is shown and entered as. `group` is a
- * repeatable list of items, each a fixed set of scalar sub-fields.
+ * repeatable list of items, each a fixed set of scalar sub-fields;
+ * `structured` is a single object of such sub-fields.
  */
 export type FieldType =
   | "string"
@@ -72,7 +98,8 @@ export type FieldType =
   | "boolean"
   | "array"
   | "object"
-  | "group";
+  | "group"
+  | "structured";
 
 export interface FieldOption {
   value: string;
@@ -100,11 +127,14 @@ export interface FieldModel {
   nullable: boolean;
   /** The choices of an enum, or of an array of enum, with display words. */
   options?: FieldOption[];
+  /** The words shown for the field where a record holds no value. */
+  emptyLabel?: string;
   reference?: { entity: string };
   /**
-   * A `group` field's item shape: one sub-field per scalar property an item
-   * carries. A sub-field that is itself a nested array, object or reference
-   * is read-only; the kit renders it, it never guesses how to edit it.
+   * A `group` field's item shape, or a `structured` field's own: one
+   * sub-field per scalar property the object carries. A sub-field that is
+   * itself a nested array, object or reference is read-only; the kit renders
+   * it, it never guesses how to edit it.
    */
   items?: readonly FieldModel[];
 }
@@ -179,10 +209,13 @@ export interface RequestView {
 
 /**
  * A read of one entity's records. `filters` match field values exactly, by
- * field id; `state` and `target` apply to a request entity only.
+ * field id, and a null filter matches a record where the field is empty;
+ * `search` matches the entity's search fields; `state` and `target` apply
+ * to a request entity only.
  */
 export interface RecordQuery {
-  filters?: Record<string, string>;
+  filters?: Record<string, string | null>;
+  search?: string;
   state?: RequestState;
   /** The id of the record the requests change. */
   target?: string;
@@ -202,12 +235,17 @@ export interface RecordPage {
   actions?: RecordActionReference[];
 }
 
-/** An opaque reference to one action this session may take on a record. */
+/**
+ * An opaque reference to one action this session may take on a record. An
+ * `invoke` is a governed registry action whose result lands in `entity`;
+ * `actionId` names it, so a page can open the form for one action by id.
+ */
 export interface RecordActionReference {
   ref: string;
-  name: "create" | "patch" | "lifecycle" | "removeAttachment";
+  name: "create" | "patch" | "lifecycle" | "removeAttachment" | "invoke";
   entity: string;
   action?: RequestAction;
+  actionId?: string;
   label?: string;
   fields?: FieldModel[];
 }
@@ -246,6 +284,12 @@ export type RecordTask =
       slot: string;
       actionRef: string;
       expectedRevision: string;
+    }
+  | {
+      type: "invoke";
+      entity: string;
+      actionRef: string;
+      values: Record<string, JsonValue>;
     };
 
 /** One record task under the attempt id that makes it idempotent. */
@@ -261,3 +305,16 @@ export type RecordTaskResult =
       receipt: string;
     }
   | { outcome: "unknown"; attemptId: string; supportReference: string };
+
+/** One earlier or current state of a record, newest first in a history. */
+export interface RecordRevision {
+  revision: string;
+  /** When the registry recorded this state, as an RFC 3339 timestamp. */
+  recordedAt?: string;
+  values: Record<string, JsonValue>;
+}
+
+/** A record's states over time, newest first. */
+export interface RecordHistory {
+  items: RecordRevision[];
+}

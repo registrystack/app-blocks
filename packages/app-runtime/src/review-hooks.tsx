@@ -43,6 +43,9 @@ function reviewKeys(scope: string, taskId: string): QueryKey[] {
     [scope, "review-task", taskId],
     [scope, "review-queue"],
     [scope, "review-history"],
+    // The decision reaches the request BREG holds through a delivery; a request read
+    // held before it is read again rather than shown as still awaiting review.
+    [scope, "record"],
   ];
 }
 
@@ -88,7 +91,7 @@ export function holdVerdict(
  * A claim or release body is the revision and the operation, nothing else, so the marker
  * alone can resend it, even from the officer's next session.
  */
-const holdCommand: CommandSpec<HoldInput, ReviewCommandResult> = {
+export const holdCommand: CommandSpec<HoldInput, ReviewCommandResult> = {
   scope: "review-task-hold",
   operation: (input) => input.operation,
   expectedRevision: (input) => input.revision,
@@ -108,6 +111,8 @@ const holdCommand: CommandSpec<HoldInput, ReviewCommandResult> = {
   invalidates: (_value, scope) => [
     [scope, "review-task"],
     [scope, "review-queue"],
+    // The inbox row of the same request shows who holds its review.
+    [scope, "casework-items"],
   ],
   recoverAcrossSessions: true,
 };

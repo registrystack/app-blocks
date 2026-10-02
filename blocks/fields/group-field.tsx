@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { FieldModel, JsonValue } from "@registrystack/app-runtime";
 import { useBlockContent } from "@/blocks/lib/content";
 import { describedBy } from "@/blocks/fields/input-field";
@@ -24,6 +24,126 @@ function asItems(value: JsonValue | undefined): GroupItem[] {
 /** One item's own sub-field id, scoped to its item so items never collide. */
 function itemFieldId(field: FieldModel, index: number, subId: string): string {
   return `${field.id}-${index}-${subId}`;
+}
+
+/** An object with one sub-field set, or removed when the answer is undefined. */
+function withSub(
+  item: GroupItem,
+  subId: string,
+  subValue: JsonValue | undefined,
+): GroupItem {
+  const next = { ...item };
+  if (subValue === undefined) delete next[subId];
+  else next[subId] = subValue;
+  return next;
+}
+
+/** A value read as an object of sub-field answers; anything else as none. */
+function asObject(value: JsonValue | undefined): GroupItem {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as GroupItem)
+    : {};
+}
+
+/**
+ * A structured field's own object with one sub-field set. An optional field
+ * whose sub-fields are all blank is no answer at all, so it reads back as
+ * undefined and nothing is sent for it; a required field keeps its object so
+ * the form can refuse the blanks.
+ */
+export function withSubValue(
+  field: FieldModel,
+  current: JsonValue | undefined,
+  subId: string,
+  subValue: JsonValue | undefined,
+): GroupItem | undefined {
+  const next = withSub(asObject(current), subId, subValue);
+  const blank = Object.values(next).every((value) => value === "");
+  return !field.required && blank ? undefined : next;
+}
+
+/** One labelled control per sub-field, each scoped to an id of its own. */
+function SubFieldControls({
+  subs,
+  item,
+  idOf,
+  onChange,
+}: {
+  subs: readonly FieldModel[];
+  item: GroupItem;
+  idOf: (subId: string) => string;
+  onChange: (subId: string, value: JsonValue | undefined) => void;
+}) {
+  return subs.map((sub) => (
+    <FieldControl
+      key={sub.id}
+      field={{ ...sub, id: idOf(sub.id) }}
+      value={item[sub.id]}
+      onChange={(next) => onChange(sub.id, next)}
+    />
+  ));
+}
+
+/** The fieldset, legend, hint and single error a group and a structured field share. */
+function GroupFieldset({
+  field,
+  error,
+  children,
+}: {
+  field: FieldModel;
+  error?: string | undefined;
+  children: ReactNode;
+}) {
+  const c = useBlockContent();
+  return (
+    <fieldset
+      id={field.id}
+      tabIndex={-1}
+      className={`field group-field ${error ? "field-error" : ""}`}
+      aria-describedby={describedBy(field.id, field.hint, error)}
+      aria-invalid={!!error}
+    >
+      <legend>{field.label}</legend>
+      {field.hint && (
+        <p className="field-hint" id={`${field.id}-hint`}>
+          {field.hint}
+        </p>
+      )}
+      {error && (
+        <p className="field-error-message" id={`${field.id}-error`}>
+          <span className="sr-only">{c.errorPrefix} </span>
+          {error}
+        </p>
+      )}
+      {children}
+    </fieldset>
+  );
+}
+
+/**
+ * A single structured object's sub-fields: one labelled control per
+ * sub-field, the same control a top-level field of that kind uses, scoped to
+ * an id under the field's own. The field carries a single error message at
+ * its own fieldset, as a group does.
+ */
+export function StructuredControl({
+  field,
+  value,
+  onChange,
+  error,
+}: FieldControlProps) {
+  return (
+    <GroupFieldset field={field} error={error}>
+      <SubFieldControls
+        subs={field.items ?? []}
+        item={asObject(value)}
+        idOf={(subId) => `${field.id}-${subId}`}
+        onChange={(subId, next) =>
+          onChange(withSubValue(field, value, subId, next))
+        }
+      />
+    </GroupFieldset>
+  );
 }
 
 /**
@@ -112,13 +232,9 @@ export function GroupControl({
     subValue: JsonValue | undefined,
   ) {
     onChange(
-      items.map((item, i) => {
-        if (i !== index) return item;
-        const next = { ...item };
-        if (subValue === undefined) delete next[subId];
-        else next[subId] = subValue;
-        return next;
-      }),
+      items.map((item, i) =>
+        i === index ? withSub(item, subId, subValue) : item,
+      ),
     );
   }
 
@@ -141,38 +257,18 @@ export function GroupControl({
   }
 
   return (
-    <fieldset
-      id={field.id}
-      tabIndex={-1}
-      className={`field group-field ${error ? "field-error" : ""}`}
-      aria-describedby={describedBy(field.id, field.hint, error)}
-      aria-invalid={!!error}
-    >
-      <legend>{field.label}</legend>
-      {field.hint && (
-        <p className="field-hint" id={`${field.id}-hint`}>
-          {field.hint}
-        </p>
-      )}
-      {error && (
-        <p className="field-error-message" id={`${field.id}-error`}>
-          <span className="sr-only">{c.errorPrefix} </span>
-          {error}
-        </p>
-      )}
+    <GroupFieldset field={field} error={error}>
       {items.map((item, index) => (
         <fieldset key={index} className="group-item">
           <legend>
             {(c.groupItemLegend ?? ((n) => `Item ${n}`))(index + 1)}
           </legend>
-          {subs.map((sub) => (
-            <FieldControl
-              key={sub.id}
-              field={{ ...sub, id: itemFieldId(field, index, sub.id) }}
-              value={item[sub.id]}
-              onChange={(next) => updateItem(index, sub.id, next)}
-            />
-          ))}
+          <SubFieldControls
+            subs={subs}
+            item={item}
+            idOf={(subId) => itemFieldId(field, index, subId)}
+            onChange={(subId, next) => updateItem(index, subId, next)}
+          />
           <button type="button" onClick={() => removeItem(index)}>
             {(c.removeGroupItem ?? ((n) => `Remove item ${n}`))(index + 1)}
           </button>
@@ -181,6 +277,6 @@ export function GroupControl({
       <button type="button" id={addButtonId} onClick={addItem}>
         {c.addGroupItem ?? "Add item"}
       </button>
-    </fieldset>
+    </GroupFieldset>
   );
 }

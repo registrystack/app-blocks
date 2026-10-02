@@ -27,7 +27,18 @@ export interface ReviewTask {
   status: ReviewTaskStatus;
   holder?: CaseworkPrincipal;
   heldByYou: boolean;
+  /**
+   * Human references of the request under review, joined on the host from the
+   * registry record the task reviews. Absent when the caller cannot read it.
+   */
+  reference?: string | null;
+  supportingReference?: string | null;
 }
+/** The part of a review task an inbox row needs to point at it. */
+export type ReviewTaskLink = Pick<
+  ReviewTask,
+  "taskId" | "status" | "revision" | "heldByYou"
+>;
 export interface ReviewTaskPage {
   items: ReviewTask[];
   nextCursor?: string | null;

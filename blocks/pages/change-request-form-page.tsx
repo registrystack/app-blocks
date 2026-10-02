@@ -28,24 +28,27 @@ import { BackLink } from "@/blocks/shell/back-link";
 import { Loading } from "@/blocks/shell/loading";
 import { ErrorPanel } from "@/blocks/shell/error-panel";
 import { PageHeading } from "@/blocks/shell/page-heading";
-import { navigate } from "@/blocks/shell/routing";
+import { navigate, splitRoute, useRoute } from "@/blocks/shell/routing";
 import { usePagesContent } from "@/blocks/pages/pages-content";
 import { useRegisterRoutes } from "@/blocks/pages/register-routes";
 import { TaskFeedback } from "@/blocks/pages/task-feedback";
 import {
-  currentValue,
   readableTarget,
   recordPath,
   recordTitle,
+  routedRequest,
   sameAnswer,
   useRegister,
   UnavailableWrite,
-  valueErrors,
-  writtenFields,
   type RecordTaskState,
   type RegisterEntities,
-  type WrittenField,
 } from "@/blocks/pages/record";
+import { valueErrors } from "@/blocks/fields/value-errors";
+import {
+  currentValue,
+  writtenFields,
+  type WrittenField,
+} from "@/blocks/request/request-changes";
 
 /** The write `ChangeRequestFormPage` submits: a plain record task, unadapted. */
 export type ChangeRequestTask = RecordTaskState<RecordTask>;
@@ -69,9 +72,11 @@ export function ChangeRequestFormPage({
   useTask: () => ChangeRequestTask;
 }) {
   const register = useRegister();
+  const { query } = splitRoute(useRoute());
   if (register.isPending) return <Loading />;
   const entities = register.entities;
-  if (register.error || !entities?.request)
+  const request = entities && routedRequest(entities, query);
+  if (register.error || !entities || !request)
     return (
       <ErrorPanel
         error={register.error}
@@ -81,14 +86,14 @@ export function ChangeRequestFormPage({
   return requestId ? (
     <DraftRequestForm
       entities={entities}
-      request={entities.request}
+      request={request}
       id={requestId}
       useTask={useTask}
     />
   ) : (
     <NewRequestForm
       entities={entities}
-      request={entities.request}
+      request={request}
       id={recordId!}
       useTask={useTask}
     />
@@ -254,7 +259,7 @@ function RequestForm({
     session = useAuthority(),
     task = useTask();
   const fields = (action.fields ?? []).filter((field) => !field.readOnly);
-  const written = writtenFields(entities, fields);
+  const written = writtenFields({ record: entities.record, request }, fields);
   const writtenIds = written.map((item) => item.field.id);
   const others = fields.filter((field) => !writtenIds.includes(field.id));
   const [values, setValues] = useState<Record<string, JsonValue>>(() =>

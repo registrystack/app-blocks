@@ -59,6 +59,8 @@ export interface CaseworkTaskPreviewList {
 }
 export interface CaseworkTaskGrantList {
   grants: CaseworkTaskGrant[];
+  /** Set, with no grants, when Casework refused this officer the item's tasks. */
+  withheld?: true;
 }
 /** An approval is keyed by its attempt id, so an unconfirmed one is resent exactly. */
 export type CaseworkTaskApprovalResult =

@@ -18,7 +18,9 @@ export const recordTaskCommand: CommandSpec<RecordTask, RecordTaskResult> = {
   scope: "record",
   operation: (task) => task.type,
   expectedRevision: (task) =>
-    task.type === "create" ? undefined : task.expectedRevision,
+    task.type === "create" || task.type === "invoke"
+      ? undefined
+      : task.expectedRevision,
   send: (host, task, attemptId) => host.submit({ attemptId, task }),
   retry: (host, attemptId) => host.retry<RecordTaskResult>(attemptId),
 };
@@ -37,7 +39,8 @@ export interface RecordCommandInput {
 /**
  * The task an offered action sends. A create is made on its own or on the `target` record
  * a request changes; a patch or lifecycle action changes the `target` record itself, at the
- * revision the person read. A removal belongs to its slot's hook.
+ * revision the person read. A governed action is invoked with its inputs alone. A removal
+ * belongs to its slot's hook.
  */
 export function recordTask(
   action: RecordActionReference,
@@ -52,6 +55,13 @@ export function recordTask(
       values: input.values ?? {},
       ...(target ? { target } : {}),
       ...(input.evidenceRef ? { evidenceRef: input.evidenceRef } : {}),
+    };
+  if (action.name === "invoke")
+    return {
+      type: "invoke",
+      entity: action.entity,
+      actionRef: action.ref,
+      values: input.values ?? {},
     };
   const { expectedRevision } = input;
   if (action.name === "patch" && target && expectedRevision !== undefined)
@@ -94,6 +104,7 @@ export function recordKeys(
   if (target) {
     if (target.entity !== entity) keys.push([scope, "records", target.entity]);
     keys.push([scope, "record", target.entity, target.id]);
+    keys.push([scope, "record-history", target.entity, target.id]);
   }
   return keys;
 }

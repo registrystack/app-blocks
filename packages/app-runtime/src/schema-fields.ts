@@ -134,10 +134,14 @@ function choiceItems(schema: JsonSchema): JsonSchema | undefined {
  * (GAPS Finding 4), so there is nothing to detect and nothing to guess at.
  */
 function groupItemsSchema(schema: JsonSchema): JsonSchema | undefined {
-  const items = object(schema.items);
-  const properties = items && object(items.properties);
-  return items && properties && Object.keys(properties).length > 0
-    ? items
+  return withProperties(object(schema.items));
+}
+
+/** The schema itself, when it is an object with at least one declared property. */
+function withProperties(schema: JsonObject | null): JsonSchema | undefined {
+  const properties = schema && object(schema.properties);
+  return schema && properties && Object.keys(properties).length > 0
+    ? schema
     : undefined;
 }
 
@@ -147,10 +151,10 @@ function acceptsEmpty(pattern: JsonValue | undefined): boolean {
 
 /**
  * One field, with labels from the UI model before those the source carries.
- * `topLevel` gates the array shapes only a top-level field may take (a
- * choice list or a repeatable group): a group item's own property is always
- * a plain scalar or, if it is itself an array, object or reference, read
- * only. This is how a nested shape the kit cannot edit stays visibly read
+ * `topLevel` gates the shapes only a top-level field may take (a choice
+ * list, a repeatable group, or a single structured object): a sub-field's own
+ * property is always a plain scalar or, if it is itself an array, object or
+ * reference, read only. This is how a nested shape the kit cannot edit stays visibly read
  * only instead of being guessed at.
  */
 function buildField(
@@ -164,15 +168,22 @@ function buildField(
     topLevel && declared === "array" ? choiceItems(base) : undefined;
   const groupItems =
     topLevel && declared === "array" ? groupItemsSchema(base) : undefined;
-  const type: FieldType = groupItems ? "group" : (declared ?? "object");
+  const structured =
+    topLevel && declared === "object" ? withProperties(base) : undefined;
+  const type: FieldType = groupItems
+    ? "group"
+    : structured
+      ? "structured"
+      : (declared ?? "object");
   const listed =
     type === "array"
       ? arrayItems && choices(withoutNull(arrayItems).base)
-      : type === "group"
+      : type === "group" || type === "structured"
         ? undefined
         : choices(base);
   const editable =
     type === "group" ||
+    type === "structured" ||
     (declared !== undefined &&
       type !== "object" &&
       (type !== "array" || arrayItems !== undefined));
@@ -196,9 +207,9 @@ function buildField(
       value: String(value),
       label: label(String(value)) ?? title ?? String(value),
     }));
+  const subSchema = groupItems ?? structured;
   const items =
-    groupItems &&
-    fieldsFromSchemaProperties(groupItems, text.items ?? {}, false);
+    subSchema && fieldsFromSchemaProperties(subSchema, text.items ?? {}, false);
   return {
     id: source.id,
     apiName: source.apiName ?? source.id,
@@ -440,8 +451,8 @@ function arrayBoundsIssue(
 }
 
 /**
- * One group item's own sub-fields, checked the same way a top-level field
- * is. A sub-field the kit cannot edit rides along in the item unchecked: it
+ * One group item's, or one structured field's, own sub-fields, checked the
+ * same way a top-level field is. A sub-field the kit cannot edit rides along in the item unchecked: it
  * is not offered for editing, so it is never wrong.
  */
 function groupItemIssue(
@@ -472,6 +483,8 @@ function valueIssue(
   if (value === "" && field.required && !field.acceptsBlank)
     return { code: "required" };
   const { base } = withoutNull(field.schema);
+  if (field.type === "structured")
+    return groupItemIssue(field.items ?? [], value);
   if (field.type !== "array" && field.type !== "group")
     return scalarIssue(base, field.type, value);
   if (!Array.isArray(value)) return { code: "type" };

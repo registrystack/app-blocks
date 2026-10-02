@@ -55,7 +55,12 @@ import {
 import { CaseworkAssignmentForm } from "@/blocks/pages/casework-staffing";
 import { usePagesContent } from "@/blocks/pages/pages-content";
 import { useItemPageContent } from "@/blocks/pages/casework-item-content";
-import { ChangeTable, type ChangeRow } from "@/blocks/request/request-changes";
+import {
+  ChangeTable,
+  writtenChangeRows,
+  writtenFields,
+  type ChangeRow,
+} from "@/blocks/request/request-changes";
 import type { UploadOutcome } from "@/blocks/request/attachment-slots";
 import {
   SupportingDocuments,
@@ -65,12 +70,11 @@ import { DocumentPreview } from "@/blocks/documents/document-preview";
 import { useDocumentSelection } from "@/blocks/documents/document-selection";
 import type { DocumentSource } from "@/blocks/documents/document-view";
 import {
-  currentValue,
   fieldOf,
   readableTarget,
   recordPath,
   useRegister,
-  writtenFields,
+  workItemEntities,
   type RegisterEntities,
 } from "@/blocks/pages/record";
 import { useRegisterRoutes } from "@/blocks/pages/register-routes";
@@ -84,11 +88,6 @@ import { useRegisterRoutes } from "@/blocks/pages/register-routes";
  * the attachment upload and removal commands name a register-specific effect
  * and come from the caller; everything else reads generic Casework wording.
  */
-
-/** Exact, order-sensitive equality: a reordered list is a change. */
-function sameValue(current: unknown, proposed: unknown): boolean {
-  return JSON.stringify(current) === JSON.stringify(proposed);
-}
 
 /**
  * Whether the applicant's return flagged a field. Casework names a field as
@@ -120,28 +119,13 @@ function changeRows(
   flagged: string,
   flaggedFields: string[] | undefined,
 ): ChangeRow[] {
-  return writtenFields(entities, request.fields).map(
-    ({ field, target: targetField }) => {
-      const current = currentValue(targetField, target, view.request);
-      const proposed = view.values[field.id];
-      return {
-        key: targetField.id,
-        label: `${targetField.label}${isFlagged(flaggedFields, field, targetField) ? ` (${flagged})` : ""}`,
-        current:
-          current === undefined ? (
-            <p className="muted">{currentUnavailable}</p>
-          ) : (
-            <FieldValue field={targetField} value={current} />
-          ),
-        proposed: <FieldValue field={targetField} value={proposed} />,
-        comparison:
-          current === undefined
-            ? "unknown"
-            : sameValue(current, proposed)
-              ? "unchanged"
-              : "changed",
-      };
-    },
+  return writtenChangeRows(
+    writtenFields({ record: entities.record, request }, request.fields),
+    view,
+    target,
+    currentUnavailable,
+    ({ field, target: targetField }) =>
+      `${targetField.label}${isFlagged(flaggedFields, field, targetField) ? ` (${flagged})` : ""}`,
   );
 }
 
@@ -235,9 +219,11 @@ function CaseSummary({
   const routes = useRegisterRoutes();
   const attachmentHref = useAttachmentHref();
   const register = useRegister();
-  const entities = register.entities;
+  const entities = register.data
+    ? workItemEntities(register.data.entities, work.sourceEntity)
+    : null;
   const requestEntity = entities?.request;
-  // The item names its request by id only; the session model says which entity it is.
+  // The item names its request's entity and id; the session model describes that entity.
   const request = useRecord(
     requestEntity?.id ?? "",
     requestEntity ? sourceRequestId : "",
@@ -331,9 +317,10 @@ function CaseSummary({
               <AskedFields
                 request={requestEntity}
                 view={request.data}
-                written={writtenFields(entities, requestEntity.fields).map(
-                  (item) => item.field.id,
-                )}
+                written={writtenFields(
+                  { record: entities.record, request: requestEntity },
+                  requestEntity.fields,
+                ).map((item) => item.field.id)}
                 flagged={itemPage.flagged}
                 flaggedFields={flaggedFields}
               />

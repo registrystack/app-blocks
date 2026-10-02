@@ -1,7 +1,15 @@
 import { Fragment, useId, useState, type ReactNode } from "react";
+import type {
+  EntityModel,
+  FieldModel,
+  JsonValue,
+  RecordView,
+  RequestView,
+} from "@registrystack/app-runtime";
 import { Button } from "@/components/ui/button";
 import { useBlockContent } from "@/blocks/lib/content";
 import { fill } from "@/blocks/lib/format";
+import { FieldValue } from "@/blocks/fields/field-value";
 
 export interface ChangeRow {
   key: string;
@@ -100,6 +108,90 @@ export function ChangeTable({
       )}
     </div>
   );
+}
+
+/** One field a request writes, with the target field it lands in. */
+export interface WrittenField {
+  field: FieldModel;
+  target: FieldModel;
+}
+
+/**
+ * The fields a request writes on its target record, in the order the request
+ * model names them. A write whose field either model lacks is left out. The
+ * writes are the named request entity's own, so a register with several
+ * request entities pairs each with its own.
+ */
+export function writtenFields(
+  entities: { record: EntityModel; request: EntityModel },
+  requestFields: readonly FieldModel[],
+): WrittenField[] {
+  return (entities.request.request?.writes ?? []).flatMap((write) => {
+    const field = requestFields.find((item) => item.id === write.requestField);
+    const target = entities.record.fields.find((item) => item.id === write.targetField);
+    return write.targetEntity === entities.record.id && field && target
+      ? [{ field, target }]
+      : [];
+  });
+}
+
+/**
+ * What a target field holds now: the live target record when it was read,
+ * else the value the request retained, unless the host marked the target
+ * unavailable. Undefined where neither is known.
+ */
+export function currentValue(
+  targetField: FieldModel,
+  target: RecordView | undefined,
+  request: RequestView | undefined,
+): JsonValue | undefined {
+  if (target) return target.values[targetField.id];
+  return request?.target?.available === false
+    ? undefined
+    : request?.previous?.[targetField.id];
+}
+
+/** Exact, order-sensitive equality: a reordered list is a change. */
+function sameValue(current: unknown, proposed: unknown): boolean {
+  return JSON.stringify(current) === JSON.stringify(proposed);
+}
+
+/**
+ * The comparison rows for one request, one for each field it writes. Current
+ * values come from the live target record, so before-values survive the
+ * decision that removes the pending lifecycle action; the values the request
+ * retained stand in only while the target is not marked unavailable. A row
+ * is labelled by its target field unless `labelOf` words it otherwise.
+ */
+export function writtenChangeRows(
+  written: readonly WrittenField[],
+  view: RecordView,
+  target: RecordView | undefined,
+  currentUnavailable: string,
+  labelOf?: (item: WrittenField) => string,
+): ChangeRow[] {
+  return written.map((item) => {
+    const { field, target: targetField } = item;
+    const current = currentValue(targetField, target, view.request);
+    const proposed = view.values[field.id];
+    return {
+      key: targetField.id,
+      label: labelOf ? labelOf(item) : targetField.label,
+      current:
+        current === undefined ? (
+          <p className="muted">{currentUnavailable}</p>
+        ) : (
+          <FieldValue field={targetField} value={current} />
+        ),
+      proposed: <FieldValue field={targetField} value={proposed} />,
+      comparison:
+        current === undefined
+          ? "unknown"
+          : sameValue(current, proposed)
+            ? "unchanged"
+            : "changed",
+    };
+  });
 }
 
 export interface ProposedChangeItem {

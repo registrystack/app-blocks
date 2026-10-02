@@ -124,7 +124,9 @@ export function CaseworkReviewsPage() {
                     className="row-link"
                     href={`#/casework/reviews/${encodeURIComponent(task.taskId)}`}
                   >
-                    {fill(r.queueRowName, { number: index + 1 })}
+                    {task.reference?.trim()
+                      ? fill(r.queueRowReference, { reference: task.reference })
+                      : fill(r.queueRowName, { number: index + 1 })}
                   </a>
                 </TableCell>
                 <TableCell>{task.queueLabel}</TableCell>

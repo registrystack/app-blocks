@@ -68,6 +68,8 @@ export interface CaseworkInboxProps {
   heading: (item: CaseworkWorkItem) => ReactNode;
   /** Where the item's reference links to. The block assumes no router of its own. */
   itemHref: (id: string) => string;
+  /** Where a review task's page is, for the link a row gets when its item has one. */
+  reviewHref?: (taskId: string) => string;
   /** Shown instead of the table when there are no items. */
   emptyTitle?: string;
   emptyBody?: string;
@@ -101,6 +103,7 @@ export function CaseworkInbox({
   caption,
   heading,
   itemHref,
+  reviewHref,
   emptyTitle,
   emptyBody,
   emptyContent,
@@ -163,6 +166,7 @@ export function CaseworkInbox({
             caption={caption}
             heading={heading}
             itemHref={itemHref}
+            reviewHref={reviewHref}
             emptyTitle={emptyTitle}
             emptyBody={emptyBody}
             emptyContent={emptyContent}

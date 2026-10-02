@@ -7,7 +7,14 @@ import { useBlockContent } from "@/blocks/lib/content";
  * the read does not resolve to notes, reads as the same not-available
  * sentence; only an "available" read shows the reviewer's own words.
  */
-export function ReviewNotes({ notes }: { notes: RequesterReviewNotes }) {
+export function ReviewNotes({
+  notes,
+  noNote,
+}: {
+  notes: RequesterReviewNotes;
+  /** What a read with no note says; the holder's own wording when absent. */
+  noNote?: string;
+}) {
   const c = useBlockContent();
   if (notes.state === "available")
     return (
@@ -19,6 +26,6 @@ export function ReviewNotes({ notes }: { notes: RequesterReviewNotes }) {
         ))}
       </>
     );
-  if (notes.state === "none") return <p>{c.revisionNoNote}</p>;
+  if (notes.state === "none") return <p>{noNote ?? c.revisionNoNote}</p>;
   return <p>{c.undisclosedRevisionReason}</p>;
 }

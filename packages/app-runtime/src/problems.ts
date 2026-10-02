@@ -17,6 +17,8 @@ export interface ProblemView {
   kind: ProblemKind;
   /** A Casework problem, whose message is maintained page copy. */
   casework: boolean;
+  /** A write the registry refused in its UI model's own words, so page copy. */
+  worded: boolean;
   /** The service's own answer; null when none came back, such as after a lost connection. */
   status: number | null;
   code: string | null;
@@ -29,14 +31,16 @@ export interface ProblemView {
  * The one reading of any error a host call throws. A typed Casework problem is read by
  * the status its code stands for, and its message is page copy. Any other host answer is
  * read by its code first and its status after, and its message is not page copy, because
- * it can carry registry facts. Anything that is not a host answer is the service being
- * unavailable.
+ * it can carry registry facts, unless the host marks it worded: a write the registry
+ * refused, in its UI model's own words, which reads as refused. Anything that is not a
+ * host answer is the service being unavailable.
  */
 export function problemView(error: unknown): ProblemView {
   if (!(error instanceof HostError))
     return {
       kind: "service",
       casework: false,
+      worded: false,
       status: null,
       code: null,
       message: null,
@@ -45,17 +49,20 @@ export function problemView(error: unknown): ProblemView {
     };
   const { code } = error.problem;
   const { status } = error;
+  const worded = error.problem.worded === true;
   const caseworkStatus = isCaseworkProblemCode(code)
     ? caseworkProblemStatus(code)
     : code.startsWith("casework.")
       ? status
       : undefined;
   return {
-    kind:
-      caseworkStatus !== undefined
+    kind: worded
+      ? "refused"
+      : caseworkStatus !== undefined
         ? caseworkKind(code, caseworkStatus)
         : hostKind(code, status),
-    casework: caseworkStatus !== undefined,
+    casework: !worded && caseworkStatus !== undefined,
+    worded,
     status,
     code,
     message: error.message,
@@ -114,6 +121,7 @@ export function taskRefusal(error: unknown, unknown: boolean): TaskRefusal {
     staleConflict:
       problem.status !== null &&
       !unknown &&
+      !problem.worded &&
       (problem.code === "precondition.failed" || problem.status === 412),
   };
 }

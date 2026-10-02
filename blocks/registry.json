@@ -278,11 +278,12 @@
       "name": "field-renderers",
       "type": "registry:component",
       "title": "Field renderers",
-      "description": "Renders and edits a record field by its kind: text, number, date, boolean, enum, multi-enum, a repeatable group, or a raw JSON value read only. Provides the per-kind renderer map, the labelled controls, and the read-only value views, with a context to override or extend the kinds a project needs.",
+      "description": "Renders and edits a record field by its kind: text, number, date, boolean, enum, multi-enum, a repeatable group, a single structured object of sub-fields, a reference chosen from, and shown as, the title of the record it names, or a raw JSON value read only. Provides the per-kind renderer map, the labelled controls, and the read-only value views, with a context to override or extend the kinds a project needs.",
       "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
       "registryDependencies": [
         "@registrystack/lib-content",
-        "@registrystack/ui-input"
+        "@registrystack/ui-input",
+        "@registrystack/ui-button"
       ],
       "files": [
         { "path": "fields/renderers.ts", "type": "registry:component", "target": "@components/fields/renderers.ts" },
@@ -291,7 +292,20 @@
         { "path": "fields/field-value.tsx", "type": "registry:component", "target": "@components/fields/field-value.tsx" },
         { "path": "fields/group-field.tsx", "type": "registry:component", "target": "@components/fields/group-field.tsx" },
         { "path": "fields/input-field.tsx", "type": "registry:component", "target": "@components/fields/input-field.tsx" },
+        { "path": "fields/reference-picker.tsx", "type": "registry:component", "target": "@components/fields/reference-picker.tsx" },
+        { "path": "fields/reference-value.tsx", "type": "registry:component", "target": "@components/fields/reference-value.tsx" },
         { "path": "fields/values.tsx", "type": "registry:component", "target": "@components/fields/values.tsx" }
+      ]
+    },
+    {
+      "name": "field-value-errors",
+      "type": "registry:component",
+      "title": "Field value errors",
+      "description": "Checks a form's answers against the registry's rules and schema and words one message per field, from the block content.",
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "registryDependencies": ["@registrystack/lib-content"],
+      "files": [
+        { "path": "fields/value-errors.ts", "type": "registry:component", "target": "@components/fields/value-errors.ts" }
       ]
     },
     {
@@ -362,9 +376,9 @@
     {
       "name": "record-filters",
       "type": "registry:block",
-      "title": "Record search form",
-      "description": "A search input with submit and clear actions for filtering a list of records.",
-      "dependencies": ["lucide-react@1.43.0"],
+      "title": "Record search form and filter bar",
+      "description": "A search input with submit and clear actions for filtering a list of records, and a bar of selects that narrow a list by the entity model's filter fields.",
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/lib-content",
         "@registrystack/ui-button",
@@ -442,8 +456,10 @@
       "name": "request-changes",
       "type": "registry:block",
       "title": "Change comparison tables",
-      "description": "A three-column before-and-after table for reviewing proposed field changes, and a two-column comparison for a person to check their own proposal before it is sent.",
+      "description": "A three-column before-and-after table for reviewing proposed field changes, the rows a request's written fields make against the record they change, and a two-column comparison for a person to check their own proposal before it is sent.",
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
       "registryDependencies": [
+        "@registrystack/field-renderers",
         "@registrystack/ui-button",
         "@registrystack/lib-content",
         "@registrystack/lib-format"
@@ -1263,6 +1279,7 @@
       "type": "registry:block",
       "title": "Pages content provider",
       "description": "Generic English defaults for a register's record and request pages: lists, detail, creating a record, the change request form and its recovery notices, replaced with an app's own wording through a React context.",
+      "registryDependencies": ["@registrystack/lib-format"],
       "files": [
         { "path": "pages/pages-content.tsx", "type": "registry:block", "target": "@components/pages/pages-content.tsx" }
       ]
@@ -1282,27 +1299,50 @@
         "@registrystack/pages-content",
         "@registrystack/pages-register-routes",
         "@registrystack/pages-task-feedback",
-        "@registrystack/ui-button"
+        "@registrystack/ui-button",
+        "@registrystack/shell-loading"
       ],
       "files": [
         { "path": "pages/record.tsx", "type": "registry:block", "target": "@components/pages/record.tsx" }
       ]
     },
     {
-      "name": "pages-task-feedback",
-      "type": "registry:block",
+      "name": "lib-task-outcome",
+      "type": "registry:lib",
       "title": "Task feedback",
-      "description": "A record or request command's outcome: sending, an unconfirmed result with its retry, a refusal, or a confirmed receipt with a link to what it created.",
+      "description": "A record or request command's outcome: sending, an unconfirmed result with its retry, a refusal, or a confirmed receipt with a link to what it created. The caller supplies where the reconcile button points.",
       "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/lib-content",
         "@registrystack/lib-notice",
         "@registrystack/shell-error-panel",
-        "@registrystack/pages-register-routes",
         "@registrystack/ui-button"
       ],
       "files": [
+        { "path": "lib/task-outcome.tsx", "type": "registry:lib", "target": "@lib/task-outcome.tsx" }
+      ]
+    },
+    {
+      "name": "pages-task-feedback",
+      "type": "registry:block",
+      "title": "Task feedback page wrapper",
+      "description": "Task feedback with the register's routes supplied, so the reconcile button points at the register's own requests list.",
+      "registryDependencies": [
+        "@registrystack/lib-task-outcome",
+        "@registrystack/pages-register-routes"
+      ],
+      "files": [
         { "path": "pages/task-feedback.tsx", "type": "registry:block", "target": "@components/pages/task-feedback.tsx" }
+      ]
+    },
+    {
+      "name": "pages-record-route-query",
+      "type": "registry:block",
+      "title": "Record route query",
+      "description": "What a record page carries in its hash route's query: a list's filters and search, the answers a form opens with, and the path to return to once a write is confirmed.",
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "files": [
+        { "path": "pages/record-route-query.ts", "type": "registry:block", "target": "@components/pages/record-route-query.ts" }
       ]
     },
     {
@@ -1322,7 +1362,10 @@
         "@registrystack/shell-loading",
         "@registrystack/shell-error-panel",
         "@registrystack/shell-empty-state",
-        "@registrystack/ui-button"
+        "@registrystack/ui-button",
+        "@registrystack/lib-format",
+        "@registrystack/shell-routing",
+        "@registrystack/pages-record-route-query"
       ],
       "files": [
         { "path": "pages/record-list-page.tsx", "type": "registry:block", "target": "@components/pages/record-list-page.tsx" }
@@ -1344,7 +1387,11 @@
         "@registrystack/shell-loading",
         "@registrystack/shell-error-panel",
         "@registrystack/shell-status-badge",
-        "@registrystack/ui-button"
+        "@registrystack/ui-button",
+        "@registrystack/field-renderers",
+        "@registrystack/lib-format",
+        "@registrystack/record-table",
+        "@registrystack/pages-record-route-query"
       ],
       "files": [
         { "path": "pages/record-detail-page.tsx", "type": "registry:block", "target": "@components/pages/record-detail-page.tsx" }
@@ -1357,6 +1404,7 @@
       "description": "A register record, created with the create action the record list offers this session.",
       "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
       "registryDependencies": [
+        "@registrystack/field-value-errors",
         "@registrystack/pages-record",
         "@registrystack/pages-content",
         "@registrystack/pages-register-routes",
@@ -1368,10 +1416,39 @@
         "@registrystack/shell-error-panel",
         "@registrystack/shell-page-heading",
         "@registrystack/shell-routing",
-        "@registrystack/ui-button"
+        "@registrystack/ui-button",
+        "@registrystack/lib-format",
+        "@registrystack/pages-record-route-query"
       ],
       "files": [
         { "path": "pages/create-record-page.tsx", "type": "registry:block", "target": "@components/pages/create-record-page.tsx" }
+      ]
+    },
+    {
+      "name": "pages-record-action",
+      "type": "registry:block",
+      "title": "Record action page",
+      "description": "One of the registry's governed actions whose result lands in the register's records, invoked with the inputs the record list offers it with.",
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "registryDependencies": [
+        "@registrystack/field-value-errors",
+        "@registrystack/pages-create-record",
+        "@registrystack/pages-record",
+        "@registrystack/pages-content",
+        "@registrystack/pages-register-routes",
+        "@registrystack/pages-task-feedback",
+        "@registrystack/lib-content",
+        "@registrystack/record-form",
+        "@registrystack/shell-back-link",
+        "@registrystack/shell-loading",
+        "@registrystack/shell-error-panel",
+        "@registrystack/shell-page-heading",
+        "@registrystack/shell-routing",
+        "@registrystack/ui-button",
+        "@registrystack/lib-format"
+      ],
+      "files": [
+        { "path": "pages/record-action-page.tsx", "type": "registry:block", "target": "@components/pages/record-action-page.tsx" }
       ]
     },
     {
@@ -1405,6 +1482,8 @@
       "description": "A request to change one register record: a create from the record it changes, or the edit of a saved draft, with a checking step, verified prefill and the write's own task feedback.",
       "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
       "registryDependencies": [
+        "@registrystack/field-value-errors",
+        "@registrystack/request-changes",
         "@registrystack/pages-record",
         "@registrystack/pages-content",
         "@registrystack/pages-register-routes",
@@ -1439,6 +1518,7 @@
         "@registrystack/pages-record-attachments",
         "@registrystack/lib-content",
         "@registrystack/lib-notice",
+        "@registrystack/lib-format",
         "@registrystack/field-renderers",
         "@registrystack/request-actions",
         "@registrystack/request-changes",
@@ -1456,6 +1536,7 @@
         "@registrystack/shell-status-badge",
         "@registrystack/shell-live-announcer",
         "@registrystack/shell-content",
+        "@registrystack/shell-routing",
         "@registrystack/ui-button"
       ],
       "files": [
@@ -1584,6 +1665,7 @@
         "@registrystack/pages-default-notices",
         "@registrystack/pages-default-tasks",
         "@registrystack/pages-record",
+        "@registrystack/pages-record-action",
         "@registrystack/pages-record-attachments",
         "@registrystack/pages-record-detail",
         "@registrystack/pages-record-list",
@@ -1626,6 +1708,7 @@
         "@registrystack/pages-default-notices",
         "@registrystack/pages-default-tasks",
         "@registrystack/pages-record",
+        "@registrystack/pages-record-action",
         "@registrystack/pages-record-attachments",
         "@registrystack/pages-record-detail",
         "@registrystack/pages-record-list",
@@ -1641,7 +1724,9 @@
         "@registrystack/shell-public",
         "@registrystack/shell-routing",
         "@registrystack/shell-session-boundary",
-        "@registrystack/shell-work-frame"
+        "@registrystack/shell-work-frame",
+        "@registrystack/field-renderers",
+        "@registrystack/pages-record-route-query"
       ],
       "files": [
         { "path": "pages/staff-app.tsx", "type": "registry:block", "target": "@components/pages/staff-app.tsx" }

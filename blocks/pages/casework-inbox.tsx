@@ -393,6 +393,9 @@ export function CaseworkInboxPage({
         caption={c.caption}
         heading={heading}
         itemHref={(id) => `#/casework/${encodeURIComponent(id)}`}
+        reviewHref={(taskId) =>
+          `#/casework/reviews/${encodeURIComponent(taskId)}`
+        }
         emptyTitle={emptyTitle}
         emptyBody={emptyBody}
         emptyContent={

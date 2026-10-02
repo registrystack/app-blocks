@@ -1,3 +1,4 @@
+export * from "./poll-backoff.js";
 export * from "./casework-task-types.js";
 export * from "./review-types.js";
 export * from "./review-result.js";
@@ -6,6 +7,7 @@ export * from "./model.js";
 export * from "./record-title.js";
 export * from "./schema-fields.js";
 import type {
+  RecordHistory,
   RecordPage,
   RecordQuery,
   RecordSubmission,
@@ -165,6 +167,7 @@ export class HostClient {
         message: body.message ?? "The service could not complete this request.",
         fieldErrors: body.fieldErrors,
         supportReference: body.supportReference,
+        ...(body.worded === true ? { worded: true } : {}),
       });
     }
     return data as T;
@@ -180,10 +183,12 @@ export class HostClient {
   records(entity: string, filter: RecordQuery = {}) {
     const values: { [key: string]: string | undefined } = {};
     for (const [id, value] of Object.entries(filter.filters ?? {}))
-      values[`f.${id}`] = value;
+      if (value === null) values[`empty.${id}`] = "1";
+      else values[`f.${id}`] = value;
     return this.request<RecordPage>(
       `/entities/${encodeURIComponent(entity)}/records${query({
         ...values,
+        q: filter.search,
         state: filter.state,
         target: filter.target,
         size: filter.size === undefined ? undefined : String(filter.size),
@@ -195,6 +200,12 @@ export class HostClient {
   record(entity: string, id: string, lang?: string) {
     return this.request<RecordView>(
       `/entities/${encodeURIComponent(entity)}/records/${encodeURIComponent(id)}${query({ lang })}`,
+    );
+  }
+  /** The states one record has held, newest first, where the session may read them. */
+  recordHistory(entity: string, id: string) {
+    return this.request<RecordHistory>(
+      `/entities/${encodeURIComponent(entity)}/records/${encodeURIComponent(id)}/revisions`,
     );
   }
   /**

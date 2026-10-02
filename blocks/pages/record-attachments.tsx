@@ -201,20 +201,29 @@ function PendingUploads({ pending }: { pending: PendingUploadsState }) {
     block = useBlockContent(),
     routes = useRegisterRoutes(),
     register = useRegister(),
-    { path } = splitRoute(useRoute());
+    { path, query } = splitRoute(useRoute());
+  // Whether `open` is the page in view: the same path naming the same request entity.
+  const isPage = (open: string) => {
+    const target = splitRoute(open);
+    return (
+      target.path === path &&
+      target.query.get("request") === query.get("request")
+    );
+  };
   const uploads = pending.live.flatMap((upload) => {
     // A first-version upload names no entity; every such upload was on a
-    // request. A record upload names the record's entity.
+    // request, from when a register had one request entity: the followed one.
+    // A later upload names its own entity, a request entity included.
     const firstVersion = upload.entity === null;
     const entity = firstVersion
-      ? register.entities?.request?.id
+      ? register.entities?.followedRequest?.id
       : upload.entity;
     const open =
       register.entities && entity
         ? recordPath(routes, register.entities, entity, upload.resourceId)
         : null;
     // No slot claims a first-version upload, so it stays here on its own page.
-    return open === path && !firstVersion ? [] : [{ upload, open }];
+    return open && isPage(open) && !firstVersion ? [] : [{ upload, open }];
   });
   const previous = pending.orphaned;
   if (!uploads.length && !previous) return null;

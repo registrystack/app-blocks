@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useRef,
   useState,
   useEffect,
   type ReactNode,
@@ -9,6 +10,7 @@ import {
   QueryClient,
   QueryClientProvider,
   useInfiniteQuery,
+  useQueries,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -53,13 +55,19 @@ export * from "./casework-hooks.js";
 export * from "./staffing-hooks.js";
 export * from "./remembered.js";
 export * from "./session-hooks.js";
-import type { RecordQuery, RecordTask, RecordTaskResult } from "./model.js";
+import type {
+  RecordQuery,
+  RecordTask,
+  RecordTaskResult,
+  RecordView,
+} from "./model.js";
 import type {
   AttachmentFile,
   AuthenticatedSession,
   CaseworkItemFilters,
 } from "./types.js";
 import { readDocument } from "./document.js";
+import { rereadsSince, type RereadStart } from "./poll-backoff.js";
 const HostContext = createContext<HostClient | null>(null);
 const SessionContext = createContext<AuthenticatedSession | null>(null);
 export function AppProvider({
@@ -163,6 +171,18 @@ export function useModel(lang?: string) {
     staleTime: Infinity,
   });
 }
+/** A records read with the refusal facts `useRecords` reports, read on access. */
+function withRecordQueryRefusal<R extends { error: unknown }>(records: R) {
+  return Object.defineProperties(records, {
+    cursorExpired: {
+      get: () => recordQueryRefusal(records.error).cursorExpired,
+    },
+    unsupported: { get: () => recordQueryRefusal(records.error).unsupported },
+  }) as R & {
+    readonly cursorExpired: boolean;
+    readonly unsupported: boolean;
+  };
+}
 /**
  * One page of an entity's records; list items carry no actions. A refused page also says
  * whether its cursor expired and whether the query is offered at all. Both are read on
@@ -171,28 +191,79 @@ export function useModel(lang?: string) {
 export function useRecords(entity: string, filter: RecordQuery = {}) {
   const host = useHost(),
     session = useAuthority();
-  const records = useQuery({
-    queryKey: [session.scope, "records", entity, filter],
-    queryFn: () => host.records(entity, filter),
-  });
-  return Object.defineProperties(records, {
-    cursorExpired: {
-      get: () => recordQueryRefusal(records.error).cursorExpired,
-    },
-    unsupported: { get: () => recordQueryRefusal(records.error).unsupported },
-  }) as typeof records & {
-    readonly cursorExpired: boolean;
-    readonly unsupported: boolean;
-  };
+  return withRecordQueryRefusal(
+    useQuery({
+      queryKey: [session.scope, "records", entity, filter],
+      queryFn: () => host.records(entity, filter),
+    }),
+  );
 }
-/** One record with the actions the session may take on it. */
-export function useRecord(entity: string, id: string, lang?: string) {
+/**
+ * One page of the same query over several entities, a read per entity in the order given,
+ * each answering as `useRecords` does and sharing its cache. For a page whose entities come
+ * from the model, where a hook per entity cannot be written out.
+ */
+export function useRecordsOf(
+  entities: readonly string[],
+  filter: RecordQuery = {},
+) {
   const host = useHost(),
     session = useAuthority();
+  return useQueries({
+    queries: entities.map((entity) => ({
+      queryKey: [session.scope, "records", entity, filter],
+      queryFn: () => host.records(entity, filter),
+    })),
+  }).map(withRecordQueryRefusal);
+}
+/**
+ * The states one record has held, newest first. Disabled until `enabled`, so
+ * a page reads it only where the model offers revisions.
+ */
+export function useRecordHistory(entity: string, id: string, enabled = true) {
+  const host = useHost(),
+    session = useAuthority();
+  return useQuery({
+    queryKey: [session.scope, "record-history", entity, id],
+    queryFn: () => host.recordHistory(entity, id),
+    enabled: enabled && Boolean(id),
+  });
+}
+/**
+ * One record with the actions the session may take on it. A page waiting on a change that
+ * reaches the registry asynchronously passes `pollEvery`, which names the milliseconds to
+ * wait before reading the held view again, or false once it has what it waits for. It also
+ * receives how many times the view has been re-read since the page was opened, so it can
+ * lengthen the wait.
+ */
+export function useRecord(
+  entity: string,
+  id: string,
+  lang?: string,
+  pollEvery?: (
+    view: RecordView | undefined,
+    rereads: number,
+  ) => number | false,
+) {
+  const host = useHost(),
+    session = useAuthority();
+  const rereadStart = useRef<RereadStart | undefined>(undefined);
   const record = useQuery({
     queryKey: [session.scope, "record", entity, id, lang ?? ""],
     queryFn: () => host.record(entity, id, lang),
     enabled: Boolean(id),
+    refetchInterval: (query) => {
+      const { data, dataUpdateCount } = query.state;
+      if (!pollEvery) return false;
+      if (data === undefined) return pollEvery(data, 0);
+      const held = rereadsSince(
+        rereadStart.current,
+        query.queryHash,
+        dataUpdateCount,
+      );
+      rereadStart.current = held.start;
+      return pollEvery(data, held.rereads);
+    },
   });
   return {
     ...record,

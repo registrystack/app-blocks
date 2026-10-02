@@ -1,12 +1,14 @@
 import { ArrowUpRight } from "lucide-react";
 import type { FieldModel, RecordView } from "@registrystack/app-runtime";
 import { FieldValue } from "@/blocks/fields/field-value";
+import { ReferenceHrefProvider } from "@/blocks/fields/reference-value";
 import { useBlockContent } from "@/blocks/lib/content";
 
 /**
  * A record list as a table: one row per record, one column per field the
  * model names, a link on the title column and an icon link to the record on
- * every row. `recordHref` and `viewLabel` come from the app, since the route
+ * every row. The columns are the fields of whichever entity the records
+ * belong to, so a table can list related records. `recordHref` and `viewLabel` come from the app, since the route
  * a record opens on and the words a record is named by are its business.
  */
 export function RecordTable({
@@ -51,10 +53,13 @@ export function RecordTable({
                   <td key={field.id}>
                     {field === linkColumn ? (
                       <a className="record-link" href={href}>
-                        <FieldValue
-                          field={field}
-                          value={record.values[field.id]}
-                        />
+                        {/* The cell is already a link; a reference inside it must not nest another. */}
+                        <ReferenceHrefProvider href={() => null}>
+                          <FieldValue
+                            field={field}
+                            value={record.values[field.id]}
+                          />
+                        </ReferenceHrefProvider>
                       </a>
                     ) : (
                       <FieldValue

@@ -15,6 +15,19 @@ export function fill(
 }
 
 /**
+ * An operation name read as words, for a control no content names: separators
+ * and camel-case humps become spaces and the first letter is capitalised.
+ */
+export function humanizeName(name: string): string {
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_\-.\s]+/g, " ")
+    .trim()
+    .toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
  * Whole calendar days from `from` to `now`, midnight to midnight. Pure number:
  * every wording that renders it lives in content. Negative when `from` is
  * in the future; null when `from` is not a readable date.

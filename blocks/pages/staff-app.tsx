@@ -1,8 +1,13 @@
-import { useEffect, useMemo, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, type ComponentType, type ReactNode } from "react";
 import { FileCheck2, HelpCircle, Inbox, Library, Users } from "lucide-react";
-import type { AuthenticatedSession } from "@registrystack/app-runtime";
-import { useAuthority } from "@registrystack/app-runtime/react";
+import type {
+  AuthenticatedSession,
+  EntityModel,
+  RegistryModel,
+} from "@registrystack/app-runtime";
+import { useAuthority, useModel } from "@registrystack/app-runtime/react";
 import { unavailableError } from "@registrystack/app-runtime";
+import { ReferenceHrefProvider } from "@/blocks/fields/reference-value";
 import { BackLink } from "@/blocks/shell/back-link";
 import { ErrorPanel } from "@/blocks/shell/error-panel";
 import { HelpPage } from "@/blocks/shell/help-page";
@@ -25,6 +30,7 @@ import { CaseworkSetupPage } from "@/blocks/pages/casework-setup";
 import { StaffingPendingNotice } from "@/blocks/pages/casework-staffing";
 import { ChangeRequestFormPage, type ChangeRequestTask } from "@/blocks/pages/change-request-form-page";
 import { CreateRecordPage, type CreateRecordTask } from "@/blocks/pages/create-record-page";
+import { RecordActionPage } from "@/blocks/pages/record-action-page";
 import {
   DefaultCaseworkHoldingsPage,
   DefaultCaseworkInboxPage,
@@ -38,10 +44,18 @@ import {
 } from "@/blocks/pages/default-notices";
 import * as defaultTasks from "@/blocks/pages/default-tasks";
 import { usePagesContent } from "@/blocks/pages/pages-content";
-import { useRegister } from "@/blocks/pages/record";
+import {
+  entityRoutes,
+  recordPath,
+  registerEntities,
+  useRegister,
+  type RegisterEntities,
+} from "@/blocks/pages/record";
+import { listRoute } from "@/blocks/pages/record-route-query";
 import { RecordDetailPage } from "@/blocks/pages/record-detail-page";
 import { RecordListPage } from "@/blocks/pages/record-list-page";
 import {
+  matchEntityRoute,
   matchRegisterRoute,
   useRegisterRoutes,
   type RegisterRoutes,
@@ -114,12 +128,92 @@ export interface StaffAppProps {
   workItemPendingNotice?: ReactNode;
 }
 
+/**
+ * The record entities the model offers as places: one nav item each, in the
+ * model's order, and whether the register has requests to offer beside them.
+ * No items means the model names no places and the labels name the one place.
+ */
+interface RecordPlaces {
+  items: NavItem[];
+  hasRequests: boolean;
+}
+
+/** The record entities the model names as places that the session reads, in the model's order. */
+function placeEntities(
+  entities: RegisterEntities | null,
+  model: RegistryModel | undefined,
+): EntityModel[] {
+  const places = model?.places;
+  if (!entities?.records || !places) return [];
+  const records = entities.records;
+  return places.flatMap((id) => records.filter((entity) => entity.id === id));
+}
+
+/** One nav item per record entity place, each on its own list route. */
+function recordPlaces(
+  routes: RegisterRoutes,
+  entities: RegisterEntities | null,
+  model: RegistryModel | undefined,
+): RecordPlaces {
+  const items = placeEntities(entities, model).flatMap((entity) => {
+    const at = entities && entityRoutes(routes, entities, entity.id);
+    return at
+      ? [{ path: at.records, label: entity.pluralLabel, icon: Library }]
+      : [];
+  });
+  return { items, hasRequests: Boolean(entities?.followedRequest) };
+}
+
+/**
+ * The route the root stands for when the model names where a session opens:
+ * its `home` list, else the first place. Null where it names neither, and for
+ * a casework session, which opens on its own inbox.
+ */
+export function modelHomeRoute(
+  session: AuthenticatedSession,
+  routes: RegisterRoutes,
+  entities: RegisterEntities | null,
+  model: RegistryModel | undefined,
+): string | null {
+  if (session.caseworkProfile || !entities) return null;
+  const home = model?.home;
+  const at = home && entityRoutes(routes, entities, home.entity);
+  if (home && at) return listRoute(at.records, { filters: home.filters });
+  const first = placeEntities(entities, model)[0];
+  return first ? (entityRoutes(routes, entities, first.id)?.records ?? null) : null;
+}
+
+/**
+ * Where the root sends a session, or null to stay. Nothing is decided while
+ * the model is still being read, so a reviewer is not sent to a queue the
+ * model's home would have replaced. Without a model home, a reviewer goes to
+ * the request queue where the register has requests, or where no model could
+ * be read.
+ */
+export function rootRedirect(
+  session: AuthenticatedSession,
+  routes: RegisterRoutes,
+  entities: RegisterEntities | null,
+  model: RegistryModel | undefined,
+  pending: boolean,
+): string | null {
+  if (pending) return null;
+  const home = modelHomeRoute(session, routes, entities, model);
+  if (home) return home;
+  return session.role === "reviewer" &&
+    !session.caseworkProfile &&
+    (!entities || entities.followedRequest)
+    ? routes.requests
+    : null;
+}
+
 /** The places a session can go, grouped by the dividers between them. */
 function placesFor(
   session: AuthenticatedSession,
   casework: CaseworkContent,
   labels: StaffAppLabels,
   routes: RegisterRoutes,
+  record: RecordPlaces,
 ): NavGroup[] {
   const help: NavItem = { path: "/help", label: casework.navHelp, icon: HelpCircle };
   const profile = session.caseworkProfile;
@@ -147,7 +241,27 @@ function placesFor(
         : casework.navRecords;
     return [
       work,
-      [{ path: routes.records, label: recordsLabel, icon: Library }],
+      record.items.length > 0
+        ? record.items
+        : [{ path: routes.records, label: recordsLabel, icon: Library }],
+      [help],
+    ];
+  }
+  if (record.items.length > 0) {
+    const requests: NavItem[] = record.hasRequests
+      ? [
+          {
+            path: routes.requests,
+            label:
+              session.role === "reviewer" ? labels.reviewQueue : labels.requests,
+            icon: FileCheck2,
+          },
+        ]
+      : [];
+    return [
+      session.role === "reviewer"
+        ? [...requests, ...record.items]
+        : [...record.items, ...requests],
       [help],
     ];
   }
@@ -169,9 +283,14 @@ function placesFor(
 }
 
 /** The place the root route stands for, so it is marked current there. */
-function homeOf(session: AuthenticatedSession, routes: RegisterRoutes): string {
+function homeOf(
+  session: AuthenticatedSession,
+  routes: RegisterRoutes,
+  modelHome: string | null,
+): string {
   if (session.caseworkProfile === "administrator") return "/casework/setup";
   if (session.caseworkProfile) return "/casework";
+  if (modelHome) return splitRoute(modelHome).path;
   return session.role === "reviewer" ? routes.requests : "/";
 }
 
@@ -209,14 +328,31 @@ function StaffWork(props: StaffAppProps & { labels: StaffAppLabels }) {
   const routes = useRegisterRoutes();
   const casework = useCaseworkContent();
   const shell = useShellContent();
-  // One page, one URL: the reviewer's home is the request queue only, so /
-  // redirects there instead of rendering the same page twice in history.
+  // The model is read here, not through `useRegister`, so an app that names
+  // its labels reads nothing it does not use.
+  const modelRead = useModel();
+  const model = modelRead.data;
+  const entities = useMemo(
+    () => (model ? registerEntities(model.entities) : null),
+    [model],
+  );
+  const modelHome = modelHomeRoute(session, routes, entities, model);
+  // One page, one URL: the home the model names, or else the reviewer's
+  // request queue, is reached by redirect instead of rendering the same page
+  // twice in history.
+  const redirect = rootRedirect(
+    session,
+    routes,
+    entities,
+    model,
+    modelRead.isPending,
+  );
   useEffect(() => {
-    if (path === "/" && session.role === "reviewer" && !session.caseworkProfile)
-      navigate(routes.requests);
-  }, [path, session.caseworkProfile, session.role, routes.requests]);
+    if (path === "/" && redirect) navigate(redirect);
+  }, [path, redirect]);
   const parts = path.split("/").filter(Boolean).map(decodeURIComponent);
   const match = matchRegisterRoute(routes, path);
+  const entityMatch = matchEntityRoute(routes, path);
   const useCreateTask = props.useCreateTask ?? defaultTasks.useCreateTask;
   const useChangeTask = props.useChangeTask ?? defaultTasks.useChangeTask;
   const useRequestTask = props.useRequestTask ?? defaultTasks.useRequestTask;
@@ -237,13 +373,48 @@ function StaffWork(props: StaffAppProps & { labels: StaffAppLabels }) {
         <CaseworkSetupPage />
       ) : session.caseworkProfile ? (
         inbox
-      ) : session.role === "reviewer" ? null : (
+      ) : modelHome || session.role === "reviewer" ? null : (
         <RecordListPage />
       );
   else if (match.kind === "records") page = <RecordListPage />;
   else if (path === "/help") page = <HelpPage />;
   else if (match.kind === "createRecord")
     page = <CreateRecordPage useTask={useCreateTask} />;
+  else if (match.kind === "recordAction")
+    page = <RecordActionPage actionId={match.id} useTask={useCreateTask} />;
+  else if (match.kind === "action")
+    page = (
+      <RecordActionPage
+        actionId={match.actionId}
+        recordId={match.id}
+        useTask={useCreateTask}
+      />
+    );
+  else if (entityMatch.kind === "entityRecords")
+    page = <RecordListPage entity={entityMatch.entity} />;
+  else if (entityMatch.kind === "entityCreateRecord")
+    page = (
+      <CreateRecordPage entity={entityMatch.entity} useTask={useCreateTask} />
+    );
+  else if (entityMatch.kind === "entityRecordAction")
+    page = (
+      <RecordActionPage
+        entity={entityMatch.entity}
+        actionId={entityMatch.actionId}
+        useTask={useCreateTask}
+      />
+    );
+  else if (entityMatch.kind === "entityAction")
+    page = (
+      <RecordActionPage
+        entity={entityMatch.entity}
+        actionId={entityMatch.actionId}
+        recordId={entityMatch.id}
+        useTask={useCreateTask}
+      />
+    );
+  else if (entityMatch.kind === "entityRecord")
+    page = <RecordDetailPage entity={entityMatch.entity} id={entityMatch.id} />;
   else if (match.kind === "changeRecord")
     page = (
       <ChangeRequestFormPage recordId={match.id} useTask={useChangeTask} />
@@ -291,30 +462,50 @@ function StaffWork(props: StaffAppProps & { labels: StaffAppLabels }) {
     );
   else page = <ErrorPanel error={unavailableError(shell.unavailable)} />;
   const groups = useMemo(
-    () => placesFor(session, casework, props.labels, routes),
-    [session, casework, props.labels, routes],
+    () =>
+      placesFor(
+        session,
+        casework,
+        props.labels,
+        routes,
+        recordPlaces(routes, entities, model),
+      ),
+    [session, casework, props.labels, routes, entities, model],
+  );
+  // A record a field refers to opens on its own page where the app has one.
+  const referenceHref = useCallback(
+    (entity: string, id: string) => {
+      const target = entities && recordPath(routes, entities, entity, id);
+      return target ? `#${target}` : null;
+    },
+    [entities, routes],
   );
   return (
     <WorkFrame
       displayName={session.displayName}
       brand={shell.brand}
       groups={groups}
-      homePath={homeOf(session, routes)}
+      homePath={homeOf(session, routes, modelHome)}
       route={route}
     >
       {props.recoveryNotice === undefined ? <RecoveryNotice /> : props.recoveryNotice}
       {props.pendingUploadsNotice === undefined ? <PendingUploadsNotice /> : props.pendingUploadsNotice}
       {props.workItemPendingNotice === undefined ? <WorkItemPendingNotice /> : props.workItemPendingNotice}
       <StaffingPendingNotice />
-      <div key={route}>{page}</div>
+      <ReferenceHrefProvider href={referenceHref}>
+        <div key={route}>{page}</div>
+      </ReferenceHrefProvider>
     </WorkFrame>
   );
 }
 
 /**
  * A staff register work app: the work shell's places, the register's own
- * record and request pages, and Casework's inbox, item, holdings, setup,
- * reviews and review pages. It takes no register nouns of its own;
+ * record and request pages, the pages of every other record entity under
+ * `routes.entity`, and Casework's inbox, item, holdings, setup, reviews and
+ * review pages. A model that names `places` gets one nav item per place, and
+ * one that names a `home` or places opens there; a register with no request
+ * entity offers no requests place. It takes no register nouns of its own;
  * `useRegisterRoutes()` supplies the register's paths and `labels`, or the
  * model without them, supplies the nav wording, so an app names both once
  * and this composes the rest.

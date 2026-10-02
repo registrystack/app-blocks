@@ -24,7 +24,13 @@ import {
   NumberValue,
   TextValue,
 } from "@/blocks/fields/values";
-import { GroupControl, GroupValue } from "@/blocks/fields/group-field";
+import {
+  GroupControl,
+  GroupValue,
+  StructuredControl,
+} from "@/blocks/fields/group-field";
+import { ReferenceValue } from "@/blocks/fields/reference-value";
+import { ReferenceControl } from "@/blocks/fields/reference-picker";
 
 /** A recorded value to show; missing, blank and empty values never reach it. */
 export interface FieldValueProps {
@@ -67,9 +73,10 @@ export const defaultRenderers: FieldRenderers = {
   date: { Value: DateValue, Control: DateControl },
   enum: { Value: EnumValue, Control: EnumControl },
   "multi-enum": { Value: JsonValueView, Control: ChoicesControl },
-  reference: { Value: TextValue, Control: TextControl },
+  reference: { Value: ReferenceValue, Control: ReferenceControl },
   "json-value": { Value: JsonValueView },
   group: { Value: GroupValue, Control: GroupControl },
+  structured: { Value: JsonValueView, Control: StructuredControl },
 };
 
 /**
@@ -83,6 +90,7 @@ export function fieldKind(
   if (field.widget && Object.hasOwn(renderers, field.widget))
     return field.widget;
   if (field.type === "group") return "group";
+  if (field.type === "structured") return "structured";
   if (field.type === "object") return "json-value";
   if (field.type === "array")
     return field.options ? "multi-enum" : "json-value";
