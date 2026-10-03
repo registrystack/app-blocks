@@ -21,7 +21,10 @@ export function SessionBoundary({
 }) {
   const session = useSession();
   if (session.isPending) return <Loading />;
-  if (session.error)
+  // A failed background poll keeps the last session and the page it holds; only
+  // a first read that failed has nothing to show. A session the host ended
+  // arrives as signed-out data, not as an error.
+  if (session.error && !session.data)
     return (
       <ErrorPanel error={session.error} retry={() => void session.refetch()} />
     );

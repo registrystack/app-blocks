@@ -279,7 +279,7 @@
       "type": "registry:component",
       "title": "Field renderers",
       "description": "Renders and edits a record field by its kind: text, number, date, boolean, enum, multi-enum, a repeatable group, a single structured object of sub-fields, a reference chosen from, and shown as, the title of the record it names, or a raw JSON value read only. Provides the per-kind renderer map, the labelled controls, and the read-only value views, with a context to override or extend the kinds a project needs.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/lib-content",
         "@registrystack/ui-input",
@@ -302,7 +302,7 @@
       "type": "registry:component",
       "title": "Field value errors",
       "description": "Checks a form's answers against the registry's rules and schema and words one message per field, from the block content.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": ["@registrystack/lib-content"],
       "files": [
         { "path": "fields/value-errors.ts", "type": "registry:component", "target": "@components/fields/value-errors.ts" }
@@ -313,7 +313,7 @@
       "type": "registry:block",
       "title": "Record form",
       "description": "Renders a record's editable fields from its entity model, with a self-focusing validation error summary and handling for a field that is the record's sole required choice.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/field-renderers",
         "@registrystack/lib-content"
@@ -327,7 +327,7 @@
       "type": "registry:block",
       "title": "Record facts",
       "description": "A definition list of a record's field values, read through the field renderers.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": ["@registrystack/field-renderers"],
       "files": [
         { "path": "record/record-summary.tsx", "type": "registry:block", "target": "@components/record/record-summary.tsx" }
@@ -338,7 +338,7 @@
       "type": "registry:block",
       "title": "Record sections",
       "description": "Groups a record's facts into the entity's own sections, each in its own card.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": ["@registrystack/record-summary"],
       "files": [
         { "path": "record/record-sections.tsx", "type": "registry:block", "target": "@components/record/record-sections.tsx" }
@@ -349,7 +349,7 @@
       "type": "registry:block",
       "title": "Record table",
       "description": "A table of records, one row per record and one column per field, each row linking through to the record.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/field-renderers",
         "@registrystack/lib-content"
@@ -363,7 +363,7 @@
       "type": "registry:block",
       "title": "Record cards and pager",
       "description": "A card list of records built from their facts, and a cursor-based pager for moving between pages of results.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/record-summary",
         "@registrystack/lib-content",
@@ -378,7 +378,7 @@
       "type": "registry:block",
       "title": "Record search form and filter bar",
       "description": "A search input with submit and clear actions for filtering a list of records, and a bar of selects that narrow a list by the entity model's filter fields.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/lib-content",
         "@registrystack/ui-button",
@@ -402,7 +402,7 @@
       "type": "registry:block",
       "title": "Request command feedback",
       "description": "Renders the pending, unresolved, refused and confirmed states of a command run against a request, and a notice for an approved outcome the record has not yet applied.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/ui-button",
         "@registrystack/lib-notice",
@@ -417,7 +417,7 @@
       "type": "registry:block",
       "title": "Request recovery notices",
       "description": "Warns when a request's review is cancelling, uncertain, or waiting on an operator, so the holder is not left assuming their review is proceeding normally.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": ["@registrystack/lib-notice"],
       "files": [
         { "path": "request/request-recovery-notices.tsx", "type": "registry:block", "target": "@components/request/request-recovery-notices.tsx" }
@@ -428,7 +428,7 @@
       "type": "registry:block",
       "title": "Request review notes",
       "description": "Shows the reviewer's notes to the request's holder, or that none have been left.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": ["@registrystack/lib-content"],
       "files": [
         { "path": "request/request-review-notes.tsx", "type": "registry:block", "target": "@components/request/request-review-notes.tsx" }
@@ -439,7 +439,7 @@
       "type": "registry:block",
       "title": "Request decision form",
       "description": "Walks an officer through choosing one of a request's offered actions, checking it, and confirming it, with the focus and announcement each step needs. The caller supplies the actions, their reasons, and the submit and refetch behaviour.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/ui-button",
         "@registrystack/lib-notice",
@@ -457,7 +457,7 @@
       "type": "registry:block",
       "title": "Change comparison tables",
       "description": "A three-column before-and-after table for reviewing proposed field changes, the rows a request's written fields make against the record they change, and a two-column comparison for a person to check their own proposal before it is sent.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/field-renderers",
         "@registrystack/ui-button",
@@ -473,7 +473,7 @@
       "type": "registry:block",
       "title": "Attachment slots",
       "description": "Lists a record's governed attachment slots and their readiness, with one slot's upload, replace, remove and preview presentation. The caller supplies each slot's commands and this profile's authority over it.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/ui-button",
         "@registrystack/ui-input",
@@ -492,7 +492,7 @@
       "type": "registry:block",
       "title": "Verified prefill",
       "description": "Walks the consent, request and accept steps of asking a verified source for one field's answer, and a read-only summary of a field's verified evidence once a request is submitted.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/ui-button",
         "@registrystack/lib-content",
@@ -531,7 +531,7 @@
       "type": "registry:block",
       "title": "Casework content provider",
       "description": "The words Casework blocks show on their own: generic defaults an app overrides from one place without editing block source.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "files": [
         { "path": "casework/casework-content.tsx", "type": "registry:block", "target": "@components/casework/casework-content.tsx" }
       ]
@@ -541,7 +541,7 @@
       "type": "registry:block",
       "title": "Casework inbox",
       "description": "The officer's own visible work: view tabs, a queue filter and one table of work items, with routing supplied by the host.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/casework-items-table",
         "@registrystack/casework-shared",
@@ -558,7 +558,7 @@
       "type": "registry:block",
       "title": "Casework work item",
       "description": "The read-only rail, the trail, the private notes, the confirm step and the outcome of one Casework work item.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/casework-shared",
@@ -575,7 +575,7 @@
       "type": "registry:block",
       "title": "Casework items table",
       "description": "The work-item table shared by the inbox and the team board: one row per item with state, due date and waiting time.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/casework-shared",
@@ -592,7 +592,7 @@
       "type": "registry:block",
       "title": "Review context",
       "description": "What a reviewer reads before deciding: the task's subject and the context Casework recorded for it.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/casework-shared",
@@ -608,7 +608,7 @@
       "type": "registry:block",
       "title": "Review decision",
       "description": "A review task's decision form and the officer's own draft on it, with a confirm step before anything is sent.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/casework-shared",
@@ -626,7 +626,7 @@
       "type": "registry:block",
       "title": "Review history",
       "description": "What has happened on a request and the clocks running against it, one entry per recorded event.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/casework-shared",
@@ -642,7 +642,7 @@
       "type": "registry:block",
       "title": "Review notes",
       "description": "Notes on a request for other reviewers or for the requester, read and written through the host's Casework routes.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/casework-shared",
@@ -658,7 +658,7 @@
       "type": "registry:block",
       "title": "Casework setup",
       "description": "A wizard that creates or changes a team, its staff, its leader and its queue, with a check step before anything is sent and a done step after.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/casework-announce",
         "@registrystack/casework-content",
@@ -678,7 +678,7 @@
       "type": "registry:block",
       "title": "Casework shared parts",
       "description": "State chips, warnings, loading and error chrome, and relative-time wording that every Casework block shares.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/lib-content",
@@ -695,7 +695,7 @@
       "type": "registry:block",
       "title": "Casework keyboard shortcuts",
       "description": "Single-key shortcuts for the work shell and the dialog that lists them; a key fires only while no field has focus.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/ui-dialog",
@@ -710,7 +710,7 @@
       "type": "registry:block",
       "title": "Casework staffing",
       "description": "Assigning and reassigning work, recording and ending an officer's absence, and moving their work, with every refusal shown in the host's words.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/casework-announce",
         "@registrystack/casework-content",
@@ -733,7 +733,7 @@
       "type": "registry:block",
       "title": "Review subject",
       "description": "What a reviewer sees of a task's subject: a BREG record's live fields, or the fields its display schema describes.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/casework-shared",
@@ -748,7 +748,7 @@
       "type": "registry:block",
       "title": "Casework agent tasks",
       "description": "The agent tasks on a Casework work item or a review task, with the controls an officer uses to preview and approve them.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/casework-shared",
@@ -764,7 +764,7 @@
       "type": "registry:block",
       "title": "Casework team board",
       "description": "The supervisor's team board: the counts Casework sent for the page, each officer's load and the team's work items.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/casework-items-table",
@@ -785,7 +785,7 @@
       "type": "registry:block",
       "title": "Casework work shell",
       "description": "The staff work shell: one dense header, a sidebar that is a plain list of links, the jump palette and the shortcuts.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/casework-command-palette",
         "@registrystack/casework-content",
@@ -815,7 +815,7 @@
       "type": "registry:block",
       "title": "Document preview",
       "description": "Opens one attachment version for reading: page navigation, zoom, rotation and page text for a document a caller has already decoded, with a bounded raster path for images. A PDF renderer is supplied by the caller; without one, a PDF shows the same refusal as any document that could not be opened.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/ui-button",
         "@registrystack/lib-format",
@@ -919,7 +919,7 @@
       "type": "registry:block",
       "title": "Error panel",
       "description": "Words a failed read or write by its problem kind, with a support reference and an optional retry button.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/lib-notice",
         "@registrystack/shell-content",
@@ -934,7 +934,7 @@
       "type": "registry:block",
       "title": "Sign out",
       "description": "Ends the session and shows the host's own error if it fails.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/shell-content",
         "@registrystack/shell-error-panel",
@@ -949,7 +949,7 @@
       "type": "registry:block",
       "title": "Session boundary",
       "description": "Shows loading, an error, the introduction or the protected page depending on the session's own state, and turns away the wrong audience.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/shell-content",
         "@registrystack/shell-error-panel",
@@ -966,7 +966,7 @@
       "type": "registry:block",
       "title": "Signed-in shell",
       "description": "The signed-in chrome: a header with the brand and account, a sidebar for navigation, and the page, with an offline notice when the connection drops.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/lib-notice",
         "@registrystack/shell-content",
@@ -991,7 +991,7 @@
       "type": "registry:block",
       "title": "Previous submission notice",
       "description": "Warns that an earlier submission from this device needs checking.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": ["@registrystack/lib-notice", "@registrystack/shell-content"],
       "files": [
         { "path": "shell/previous-submission-notice.tsx", "type": "registry:block", "target": "@components/shell/previous-submission-notice.tsx" }
@@ -1080,7 +1080,7 @@
       "type": "registry:lib",
       "title": "Tab-scoped cursor memory",
       "description": "The cursor stack behind a paged list's Previous button, held in this browser tab so a route remount never loses it.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": ["@registrystack/lib-queue-parts"],
       "files": [
         { "path": "lib/tab-memory.ts", "type": "registry:lib", "target": "@lib/tab-memory.ts" }
@@ -1091,7 +1091,7 @@
       "type": "registry:lib",
       "title": "Opened-from list memory",
       "description": "The list an item was opened from, held in this browser tab so its page can offer previous and next.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "files": [
         { "path": "lib/list-memory.ts", "type": "registry:lib", "target": "@lib/list-memory.ts" }
       ]
@@ -1101,7 +1101,7 @@
       "type": "registry:block",
       "title": "Casework staffing page",
       "description": "Assigning, reassigning, absence cover and moving work, wired to this app's own route so a pending write can link back to the item it belongs to.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/casework-staffing",
         "@registrystack/shell-error-panel",
@@ -1138,7 +1138,7 @@
       "type": "registry:block",
       "title": "Casework inbox page",
       "description": "The officer's own visible work: view tabs, a queue chip and one table, wired to this app's own route, register routes and shortcuts.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/casework-inbox",
         "@registrystack/casework-shared",
@@ -1164,7 +1164,7 @@
       "type": "registry:block",
       "title": "Casework holdings page",
       "description": "The supervisor's team board: who holds what, their absence cover, and the team's items, which can be selected and reassigned together, wired to this app's own route.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/casework-team",
@@ -1199,7 +1199,7 @@
       "type": "registry:block",
       "title": "Casework review pages",
       "description": "The review queue this officer's Casework profile can see, and a review task's context, hold, decision, draft, notes, history and clocks, wired to this app's own routes.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/casework-review-context",
@@ -1240,7 +1240,7 @@
       "type": "registry:block",
       "title": "Casework item page",
       "description": "One casework item: what is proposed against the record it targets and why, its supporting documents, hold, assign and decide controls, private notes and history, wired to this app's own route, register routes and shortcuts.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/casework-item",
@@ -1289,7 +1289,7 @@
       "type": "registry:block",
       "title": "Record model helpers",
       "description": "Reads a session model's record and request entities, the fields a request writes and what they hold now, checks a proposed change's answers against the registry's rules, and shows the unresolved write and unavailable-write notices a record or request page needs.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/lib-content",
         "@registrystack/lib-notice",
@@ -1311,7 +1311,7 @@
       "type": "registry:lib",
       "title": "Task feedback",
       "description": "A record or request command's outcome: sending, an unconfirmed result with its retry, a refusal, or a confirmed receipt with a link to what it created. The caller supplies where the reconcile button points.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/lib-content",
         "@registrystack/lib-notice",
@@ -1340,7 +1340,7 @@
       "type": "registry:block",
       "title": "Record route query",
       "description": "What a record page carries in its hash route's query: a list's filters and search, the answers a form opens with, and the path to return to once a write is confirmed.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "files": [
         { "path": "pages/record-route-query.ts", "type": "registry:block", "target": "@components/pages/record-route-query.ts" }
       ]
@@ -1350,7 +1350,7 @@
       "type": "registry:block",
       "title": "Record list page",
       "description": "The records of the register's record entity: cards for a holder, a table for staff, with search, a create action and cursor paging.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/pages-record",
         "@registrystack/pages-content",
@@ -1362,6 +1362,7 @@
         "@registrystack/shell-loading",
         "@registrystack/shell-error-panel",
         "@registrystack/shell-empty-state",
+        "@registrystack/shell-live-announcer",
         "@registrystack/ui-button",
         "@registrystack/lib-format",
         "@registrystack/shell-routing",
@@ -1376,7 +1377,7 @@
       "type": "registry:block",
       "title": "Record detail page",
       "description": "One record of the register's record entity: its sections, a change action, its revision history and the requests already made on it.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/pages-record",
         "@registrystack/pages-content",
@@ -1402,7 +1403,7 @@
       "type": "registry:block",
       "title": "Create record page",
       "description": "A register record, created with the create action the record list offers this session.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/field-value-errors",
         "@registrystack/pages-record",
@@ -1429,7 +1430,7 @@
       "type": "registry:block",
       "title": "Record action page",
       "description": "One of the registry's governed actions whose result lands in the register's records, invoked with the inputs the record list offers it with.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/field-value-errors",
         "@registrystack/pages-create-record",
@@ -1456,7 +1457,7 @@
       "type": "registry:block",
       "title": "Record attachments",
       "description": "A record's governed attachment slots: upload, replace, remove and an on-demand preview, plus the notice of this session's uploads still waiting to be confirmed.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/pages-record",
         "@registrystack/pages-content",
@@ -1480,7 +1481,7 @@
       "type": "registry:block",
       "title": "Change request form page",
       "description": "A request to change one register record: a create from the record it changes, or the edit of a saved draft, with a checking step, verified prefill and the write's own task feedback.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/field-value-errors",
         "@registrystack/request-changes",
@@ -1510,7 +1511,7 @@
       "type": "registry:block",
       "title": "Request detail page",
       "description": "One request against the register: its proposed change compared to the record it targets, why it was asked, its supporting documents, and the decision or lifecycle action open to this session.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/pages-record",
         "@registrystack/pages-content",
@@ -1571,7 +1572,7 @@
       "type": "registry:block",
       "title": "Request queue page",
       "description": "The requests against the register's request entity: a holder's own requests, or the full queue a reviewer or other staff role sees, filterable by stage and cursor-paged.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/pages-record",
         "@registrystack/pages-content",
@@ -1597,7 +1598,7 @@
       "type": "registry:block",
       "title": "Default task hooks",
       "description": "The create, change and decision tasks and the attachment upload and removal commands the page blocks submit with: `@registrystack/app-runtime`'s own hooks, each attempt handed on as `reference`. The request attachment commands aim at the request the current route names.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/pages-change-request-form",
         "@registrystack/pages-create-record",
@@ -1617,7 +1618,7 @@
       "type": "registry:block",
       "title": "Default write notices",
       "description": "The notices of this session's unresolved submission and unresolved uploads, over the record and attachment blocks' own notices and `@registrystack/app-runtime`'s recovery and pending-upload hooks, each attempt handed on as `reference`.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/pages-record",
         "@registrystack/pages-record-attachments"
@@ -1631,7 +1632,7 @@
       "type": "registry:block",
       "title": "Default Casework bindings",
       "description": "Casework's inbox, item and Team pages bound to generic wording: each item's task named by the request label the session model gives it unless the app words it, the apply effect and state sentences from the item page's content, and the default attachment commands. Also the notice that leads an officer back to an item whose action was not confirmed, from any page but that item's own.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/document-preview",
@@ -1656,7 +1657,7 @@
       "type": "registry:block",
       "title": "Service app",
       "description": "The holder-facing composition of a register's public service: introduction, session boundary, public help, the register's own records and requests. It takes no register nouns of its own; `useRegisterRoutes()` supplies the paths, the model's plural labels name the nav places, and the task, upload and removal hooks and the notices are the default ones. A caller may pass its own nav labels, hooks and notices in their place.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/document-preview",
         "@registrystack/pages-change-request-form",
@@ -1693,7 +1694,7 @@
       "type": "registry:block",
       "title": "Staff app",
       "description": "The officer-facing composition of a register's staff work: the work shell's places, the register's own records and requests, and Casework's inbox, item, holdings, setup, reviews and review pages. It takes no register nouns of its own; `useRegisterRoutes()` supplies the paths, the model's plural labels name the nav places, and the task, upload and removal hooks, the notices and the inbox, item and holdings pages are the default ones. A caller may pass its own nav labels, task heading, hooks, notices and bound Casework pages in their place.",
-      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.0", "lucide-react@1.43.0"],
+      "dependencies": ["@registrystack/app-runtime@~0.38.0-next.2", "lucide-react@1.43.0"],
       "registryDependencies": [
         "@registrystack/casework-content",
         "@registrystack/casework-work-shell",

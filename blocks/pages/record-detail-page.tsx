@@ -38,9 +38,9 @@ import {
 /**
  * One record of one record entity, the register's own when `entity` is left
  * out, in the sections the session model gives it, with the governed actions
- * its record read offers, the records that refer to it, its history, and for
- * the register's own entity the requests its record read offers and the
- * requests already made on it, of every request entity that targets it.
+ * its record read offers, the records that refer to it, its history, the
+ * requests its record read offers and the requests already made on it, of
+ * every request entity that targets it.
  */
 export function RecordDetailPage({
   id,
@@ -72,7 +72,7 @@ function RecordDetail({
     appRoutes = useRegisterRoutes(),
     routes = entityRoutes(appRoutes, entities, entity.id),
     ownEntity = entity.id === entities.record.id,
-    requests = ownEntity ? requestsTargeting(entities, entity.id) : [],
+    requests = requestsTargeting(entities, entity.id),
     query = useRecord(entity.id, id);
   if (query.isPending) return <Loading />;
   if (query.error || !query.data)

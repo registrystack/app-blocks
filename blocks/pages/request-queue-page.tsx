@@ -141,15 +141,13 @@ function RequestQueue({
       );
   }, [query.data, announce, pages]);
 
-  // The stage filter offers the states the model names for this request,
+  // The stage filter offers the states the model says the host can filter by,
   // never a hard-coded list, in the content's words where it has them. It
   // comes from the model, so it stays mounted while another view loads.
-  const stageOptions = Object.entries(request.request?.stateLabels ?? {}).map(
-    ([value, label]) => ({
-      value,
-      label: shell.stateLabels[value] ?? label,
-    }),
-  );
+  const stageOptions = (request.request?.filterableStates ?? []).map((value) => ({
+    value,
+    label: shell.stateLabels[value] ?? request.request?.stateLabels[value],
+  }));
 
   const items = query.data?.items ?? [];
   const start = (view.page - 1) * view.size + 1;
@@ -164,7 +162,10 @@ function RequestQueue({
     session.role === "reviewer"
       ? { title: pages.queueEmptyTitle, body: pages.queueEmptyBody }
       : holder
-        ? { title: pages.holderQueueEmptyTitle, body: pages.holderQueueEmptyBody }
+        ? {
+            title: pages.holderQueueEmptyTitle,
+            body: pages.holderQueueEmptyBody,
+          }
         : { title: pages.requestsEmptyTitle, body: pages.requestsEmptyBody };
   const activeFilters: ActiveFilter[] =
     view.state === ""

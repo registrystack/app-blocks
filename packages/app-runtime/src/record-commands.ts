@@ -109,6 +109,24 @@ export function recordKeys(
   return keys;
 }
 
+/**
+ * The query keys a confirmed action refreshes. A governed action may change the records of
+ * any entity, so it refreshes every record list, record and history of the session.
+ */
+export function actionKeys(
+  scope: string,
+  action: RecordActionReference,
+  target?: CommandTarget,
+): QueryKey[] {
+  return action.name === "invoke"
+    ? [
+        [scope, "records"],
+        [scope, "record"],
+        [scope, "record-history"],
+      ]
+    : recordKeys(scope, action.entity, target);
+}
+
 /** A form's starting values: the fields the action writes, taken from `initial`. */
 export function formValues(
   fields: readonly FieldModel[],

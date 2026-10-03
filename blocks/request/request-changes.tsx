@@ -110,6 +110,27 @@ export function ChangeTable({
   );
 }
 
+/**
+ * The record entity a request changes: the one its read names as its target
+ * when it names one the session reads, else the first the request entity
+ * targets, else the register's own record entity. A register with several record entities has a
+ * request entity for each.
+ */
+export function recordOfRequest(
+  entities: { record: EntityModel; records?: readonly EntityModel[] },
+  request: EntityModel,
+  targetEntity?: string,
+): EntityModel {
+  const records = entities.records ?? [entities.record];
+  return (
+    records.find((record) => record.id === targetEntity) ??
+    records.find((record) =>
+      request.request?.targets.some((target) => target.entity === record.id),
+    ) ??
+    entities.record
+  );
+}
+
 /** One field a request writes, with the target field it lands in. */
 export interface WrittenField {
   field: FieldModel;

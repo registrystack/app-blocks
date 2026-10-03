@@ -125,6 +125,32 @@ export function useCaseworkDraftWrite(
     return () => clearTimeout(timer);
   }, [text, savedText, blocked, pending]);
 
+  // Leaving mid-pause sends the text that was waiting: the timer above is
+  // cancelled with the block, and the officer never saw a save fail.
+  const latest = useRef({ blocked, pending, text, savedText, itemRevision });
+  latest.current = { blocked, pending, text, savedText, itemRevision };
+  useEffect(
+    () => () => {
+      const { itemRevision: revision, text: waiting, ...rest } = latest.current;
+      if (
+        waiting === null ||
+        revision === null ||
+        !draftAutosaveDue({ ...rest, text: waiting, refused: refused.current })
+      )
+        return;
+      host
+        .saveCaseworkDraft(id, { itemRevision: revision, text: waiting })
+        .then(afterWrite)
+        .catch((caught) =>
+          console.error("Private notes were not saved on leaving.", caught),
+        );
+    },
+    // The cleanup of the first render runs on unmount and reads the latest
+    // values through `latest`; the item and host never change for one mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   /** Deletes the notes. True once Casework confirmed the deletion. */
   async function discard(): Promise<boolean> {
     if (itemRevision === null) return false;

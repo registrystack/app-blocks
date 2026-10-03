@@ -180,6 +180,8 @@ export interface RequestModel {
   onApproved: "manual" | "automatic";
   reviewed: boolean;
   stateLabels: Record<RequestState, string>;
+  /** The states a list of these requests can be filtered by, in display order. */
+  filterableStates: RequestState[];
 }
 
 export interface RecordView {

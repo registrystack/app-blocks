@@ -64,9 +64,9 @@ for them, on purpose, so that what installs from it is always what this reposito
   `workspace:*` in this monorepo. Each release publishes it to npm's `next` dist-tag from the
   public repository `registrystack/app-blocks`, after the maintainer approves the publish. Until
   the first stable version, npm's `latest` tag holds only an inert `0.0.0` placeholder, so an
-  install that names no version gets the placeholder. `registry.json` declares it at a range on
-  its current version (`@registrystack/app-runtime@~0.38.0-next.0`), which resolves to the newest
-  `next` release of that version. The kit's `test:registry-install` packs the workspace package
+  install that names no version gets the placeholder. `registry.json` declares it at a range that
+  starts at the runtime these blocks were released with (`@registrystack/app-runtime@~X.Y.Z-next.N`),
+  which resolves to the newest `next` release of that version. The kit's `test:registry-install` packs the workspace package
   with `pnpm pack` and serves it from a loopback registry for the duration of the test, so it
   proves what this repository builds, not what npm serves.
 

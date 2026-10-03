@@ -46,6 +46,7 @@ import {
 import { valueErrors } from "@/blocks/fields/value-errors";
 import {
   currentValue,
+  recordOfRequest,
   writtenFields,
   type WrittenField,
 } from "@/blocks/request/request-changes";
@@ -122,7 +123,8 @@ function NewRequestForm({
   id: string;
   useTask: () => ChangeRequestTask;
 }) {
-  const query = useRecord(entities.record.id, id);
+  const record = recordOfRequest(entities, request);
+  const query = useRecord(record.id, id);
   const action = useOpenedAction(
     query.data?.actions.find(
       (item) => item.name === "create" && item.entity === request.id,
@@ -135,6 +137,7 @@ function NewRequestForm({
     <RequestForm
       key={query.data.id}
       entities={entities}
+      record={record}
       request={request}
       action={action}
       target={query.data}
@@ -189,9 +192,14 @@ function DraftWithTarget({
   draft: RecordView;
   useTask: () => ChangeRequestTask;
 }) {
+  const record = recordOfRequest(
+    entities,
+    request,
+    draft.request?.target?.entity,
+  );
   const query = useRecord(
-    entities.record.id,
-    readableTarget(entities, draft.request),
+    record.id,
+    readableTarget({ ...entities, record }, draft.request),
   );
   const action = useOpenedAction(
     draft.actions.find((item) => item.name === "patch"),
@@ -202,6 +210,7 @@ function DraftWithTarget({
     <RequestForm
       key={draft.id}
       entities={entities}
+      record={record}
       request={request}
       action={action}
       target={query.data}
@@ -238,6 +247,7 @@ function ValueBlock({
 
 function RequestForm({
   entities,
+  record,
   request,
   action,
   target,
@@ -245,6 +255,8 @@ function RequestForm({
   useTask,
 }: {
   entities: RegisterEntities;
+  /** The record entity the request changes. */
+  record: EntityModel;
   request: EntityModel;
   action: RecordActionReference;
   /** The record the request changes, when it could be read. */
@@ -259,7 +271,7 @@ function RequestForm({
     session = useAuthority(),
     task = useTask();
   const fields = (action.fields ?? []).filter((field) => !field.readOnly);
-  const written = writtenFields({ record: entities.record, request }, fields);
+  const written = writtenFields({ record, request }, fields);
   const writtenIds = written.map((item) => item.field.id);
   const others = fields.filter((field) => !writtenIds.includes(field.id));
   const [values, setValues] = useState<Record<string, JsonValue>>(() =>
@@ -285,6 +297,16 @@ function RequestForm({
     document.getElementById(returnToField.current)?.focus();
     returnToField.current = null;
   }, [checking]);
+  // A refusal of a field arrives once the save settles. The check step has no
+  // inputs to carry it, so the form returns with a fresh summary, which takes focus.
+  const [refusals, setRefusals] = useState(0);
+  const refusedFields = JSON.stringify(task.fieldErrors);
+  useEffect(() => {
+    if (task.pending || !checking || !Object.keys(task.fieldErrors).length)
+      return;
+    setChecking(false);
+    setRefusals((count) => count + 1);
+  }, [task.pending, refusedFields]);
   const canChange = !task.locked;
   function changeAnswer(field: string) {
     if (!canChange) return;
@@ -372,7 +394,7 @@ function RequestForm({
       <BackLink href={back}>{pages.back}</BackLink>
       <PageHeading
         eyebrow={
-          (target && recordTitle(entities.record, target)) ??
+          (target && recordTitle(record, target)) ??
           (draft && recordTitle(request, draft))
         }
         title={checking ? pages.checkTitle : pages.changeFormTitle}
@@ -382,7 +404,11 @@ function RequestForm({
       />
       <div className="task-layout">
         <div className="card form-card">
-          <ErrorSummary errors={{ ...errors, ...problems }} />
+          <ErrorSummary
+            key={refusals}
+            errors={{ ...errors, ...problems }}
+            fields={fields}
+          />
           {checking ? (
             <>
               <div className="comparison">

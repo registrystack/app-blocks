@@ -64,7 +64,7 @@ export function ReferenceValue({ field, value }: FieldValueProps) {
   if (!entity || !id) return <>{unavailable}</>;
   if (record.isPending) return <>{c.loading}</>;
   if (record.error || !record.data) return <>{unavailable}</>;
-  const title = recordTitle(entity, record.data.values) ?? entity.label;
+  const title = recordTitle(entity, record.data.values) ?? id;
   const href = hrefOf(entity.id, id);
   return href ? <a href={href}>{title}</a> : <>{title}</>;
 }

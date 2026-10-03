@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import type { EntityModel, RecordView } from "@registrystack/app-runtime";
 import { useAuthority, useRecords } from "@registrystack/app-runtime/react";
@@ -8,6 +8,7 @@ import { Loading } from "@/blocks/shell/loading";
 import { ErrorPanel } from "@/blocks/shell/error-panel";
 import { EmptyState } from "@/blocks/shell/empty-state";
 import { navigate, splitRoute, useRoute } from "@/blocks/shell/routing";
+import { LiveAnnouncer, useAnnouncement } from "@/blocks/shell/live-announcer";
 import { RecordCards, RecordPager } from "@/blocks/record/record-list";
 import { RecordFilterBar, RecordSearchForm } from "@/blocks/record/record-filters";
 import { RecordTable } from "@/blocks/record/record-table";
@@ -87,6 +88,16 @@ function RecordList({
             : {}),
         },
   );
+  const [announcement, announce] = useAnnouncement();
+  // A cursor the host no longer holds (a restarted session lost the cursor
+  // store) is recovered from, not reported: go back to the first page of the
+  // same list, keeping the filters and search.
+  const recovering = cursor !== undefined && query.cursorExpired;
+  useEffect(() => {
+    if (!recovering) return;
+    setCursors([undefined]);
+    announce(pages.listRecoveredAnnouncement);
+  }, [recovering]);
   const narrowed = Object.keys(filters).length > 0 || Boolean(applied.search);
   const show = (next: Partial<ListQuery>) => {
     if (routes) navigate(listRoute(routes.records, next));
@@ -123,6 +134,7 @@ function RecordList({
   const recordHref = (record: RecordView) => `#${routes.record(record.id)}`;
   return (
     <>
+      <LiveAnnouncer message={announcement} />
       <PageHeading
         title={title}
         description={holder ? pages.ownListDescription : pages.listDescription}
@@ -175,7 +187,7 @@ function RecordList({
           onClear={() => show({ filters: applied.filters })}
         />
       )}
-      {query.isPending ? (
+      {query.isPending || recovering ? (
         <Loading />
       ) : query.error ? (
         <ErrorPanel error={query.error} retry={() => void query.refetch()} />

@@ -22,7 +22,8 @@ import {
  * One selected version, mounted only after a deliberate View action. PDF
  * rendering is heavier than this block should carry on its own, so an app
  * that offers PDF previews passes `openPdf`; without it, a PDF file shows
- * the same refusal as any other document that could not be opened.
+ * the unavailable wording and the download link at once, with no read and no
+ * retry, since a retry could not succeed.
  */
 export function DocumentPreview({
   href,
@@ -46,7 +47,8 @@ export function DocumentPreview({
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [source, setSource] = useState<DocumentSource | null>(null);
-  const [error, setError] = useState(false);
+  const pdfWithoutViewer = file.contentType === "application/pdf" && !openPdf;
+  const [error, setError] = useState(pdfWithoutViewer);
   const [attempt, setAttempt] = useState(0);
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
@@ -60,6 +62,7 @@ export function DocumentPreview({
   }, []);
 
   useEffect(() => {
+    if (pdfWithoutViewer) return;
     const controller = new AbortController();
     let document: DocumentSource | null = null;
     let current = true;
@@ -73,10 +76,8 @@ export function DocumentPreview({
     async function open(): Promise<DocumentSource> {
       const bytes = await readBytes(href, file, controller.signal);
       controller.signal.throwIfAborted();
-      if (file.contentType === "application/pdf") {
-        if (!openPdf) throw new Error("Document is not available for preview.");
-        return openPdf(bytes, controller.signal);
-      }
+      if (file.contentType === "application/pdf")
+        return openPdf!(bytes, controller.signal);
       return openImageDocument(bytes, file.contentType, controller.signal);
     }
     void open()
@@ -100,7 +101,14 @@ export function DocumentPreview({
     // closure each render that reads the same href, session and PDF module);
     // only a change to the document itself, or an explicit retry, should
     // restart this read.
-  }, [href, file.sha256, file.byteSize, file.contentType, attempt]);
+  }, [
+    href,
+    file.sha256,
+    file.byteSize,
+    file.contentType,
+    attempt,
+    pdfWithoutViewer,
+  ]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -271,9 +279,11 @@ export function DocumentPreview({
       {error && (
         <div className="document-preview-error" role="alert">
           <p>{copy.unavailable}</p>
-          <Button variant="outline" onClick={() => setAttempt(attempt + 1)}>
-            {copy.retry}
-          </Button>
+          {!pdfWithoutViewer && (
+            <Button variant="outline" onClick={() => setAttempt(attempt + 1)}>
+              {copy.retry}
+            </Button>
+          )}
         </div>
       )}
       <div

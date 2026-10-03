@@ -40,6 +40,7 @@ import {
 } from "@/blocks/request/request-actions";
 import {
   ChangeTable,
+  recordOfRequest,
   writtenChangeRows,
   writtenFields,
   type ChangeRow,
@@ -61,6 +62,7 @@ import type { DocumentSource } from "@/blocks/documents/document-view";
 import {
   fieldOf,
   readableTarget,
+  recordPath,
   recordTitle,
   requestRoute,
   routedRequest,
@@ -73,12 +75,25 @@ export type RequestDecisionTask = DecisionOutcome & {
   submit: (task: RecordTask) => Promise<unknown>;
 };
 
-function stateDescription(state: string, pages: PagesContent): string {
+/**
+ * The sentence for a request's state. A holder reads their own request in the
+ * second person; staff read it as someone else's.
+ */
+function stateDescription(
+  state: string,
+  pages: PagesContent,
+  holder: boolean,
+): string {
+  const revision = holder
+    ? pages.revisionDescription
+    : pages.staffRevisionDescription;
   const map: Record<string, string> = {
     draft: pages.draftDescription,
-    submitted: pages.submittedDescription,
-    "revision-requested": pages.revisionDescription,
-    "changes-requested": pages.revisionDescription,
+    submitted: holder
+      ? pages.submittedDescription
+      : pages.submittedReviewDescription,
+    "revision-requested": revision,
+    "changes-requested": revision,
     "approval-expired": pages.approvalExpiredDescription,
     approved: pages.approvedDescription,
     applied: pages.appliedDescription,
@@ -88,9 +103,13 @@ function stateDescription(state: string, pages: PagesContent): string {
   return map[state] ?? pages.actionExplanation;
 }
 
-function actionDescription(name: string, pages: PagesContent): string {
+function actionDescription(
+  name: string,
+  pages: PagesContent,
+  holder: boolean,
+): string {
   const map: Record<string, string> = {
-    submit: pages.confirmSubmit,
+    submit: holder ? pages.confirmSubmit : pages.staffConfirmSubmit,
     apply: pages.confirmApply,
     revise: pages.confirmRevision,
     rebase: pages.confirmRebase,
@@ -123,10 +142,9 @@ function choiceLabel(
  * the record's list columns other than its title.
  */
 function contextFields(
-  entities: RegisterEntities,
+  record: EntityModel,
   written: readonly string[],
 ): FieldModel[] {
-  const record = entities.record;
   const declared = record.context;
   return (declared ?? record.list.columns).flatMap((id) => {
     const field = fieldOf(record, id);
@@ -143,14 +161,14 @@ function contextFields(
  * retained stand in only while the target is not marked unavailable.
  */
 function changeRows(
-  entities: RegisterEntities,
+  record: EntityModel,
   request: EntityModel,
   view: RecordView,
   target: RecordView | undefined,
   c: BlockContent,
 ): ChangeRow[] {
   const written = writtenFields(
-    { record: entities.record, request },
+    { record, request },
     request.fields,
   );
   const rows = writtenChangeRows(
@@ -161,7 +179,7 @@ function changeRows(
   );
   if (target)
     for (const field of contextFields(
-      entities,
+      record,
       written.map((item) => item.target.id),
     ))
       rows.push({
@@ -343,9 +361,10 @@ function RequestWithTarget({
     signal: AbortSignal,
   ) => Promise<DocumentSource>;
 }) {
+  const record = recordOfRequest(entities, request, view.request?.target?.entity);
   const target = useRecord(
-    entities.record.id,
-    readableTarget(entities, view.request),
+    record.id,
+    readableTarget({ ...entities, record }, view.request),
   );
   if (target.isLoading) return <Loading />;
   return (
@@ -454,11 +473,12 @@ function RequestDetail({
     session = useAuthority(),
     task = useTask();
   const [announcement, announce] = useAnnouncement();
+  const record = recordOfRequest(entities, request, view.request?.target?.entity);
   const state = view.request?.state ?? "draft";
   const result = view.request?.review?.result.state;
   // The human reference: the target record's title, never the UUID.
   const reference =
-    (target && recordTitle(entities.record, target)) ??
+    (target && recordTitle(record, target)) ??
     recordTitle(request, view);
 
   const lifecycle = view.actions.filter(
@@ -479,7 +499,7 @@ function RequestDetail({
   const rejected = !sentBack && (state === "rejected" || result === "rejected");
 
   const written = writtenFields(
-    { record: entities.record, request },
+    { record, request },
     request.fields,
   );
   const writtenIds = written.map((item) => item.field.id);
@@ -504,10 +524,19 @@ function RequestDetail({
     : undefined;
   const context = target
     ? contextFields(
-        entities,
+        record,
         written.map((item) => item.target.id),
       )
     : [];
+
+  const targetPath =
+    view.request?.target &&
+    recordPath(
+      routes,
+      entities,
+      view.request.target.entity,
+      view.request.target.id,
+    );
 
   return (
     <>
@@ -526,11 +555,7 @@ function RequestDetail({
       ) : (
         <StateNotice
           state={state}
-          description={
-            session.role === "reviewer" && state === "submitted"
-              ? pages.submittedReviewDescription
-              : stateDescription(state, pages)
-          }
+          description={stateDescription(state, pages, holder)}
         />
       )}
       <RequestRecoveryNotices request={view.request} />
@@ -547,7 +572,13 @@ function RequestDetail({
       <LiveAnnouncer message={announcement} />
       {(sentBack || rejected) && (
         <section className="revision-next-step">
-          <h2>{sentBack ? pages.revisionReason : pages.rejectionReason}</h2>
+          <h2>
+            {sentBack
+              ? holder
+                ? pages.revisionReason
+                : pages.staffRevisionReason
+              : pages.rejectionReason}
+          </h2>
           {session.role === "holder" ? (
             <ReviewerNote entity={view.entity} id={view.id} />
           ) : session.caseworkProfile &&
@@ -562,10 +593,10 @@ function RequestDetail({
       )}
       <section>
         <h2>{block.proposedHeading}</h2>
-        <ChangeTable rows={changeRows(entities, request, view, target, block)}>
-          {view.request?.target && (
+        <ChangeTable rows={changeRows(record, request, view, target, block)}>
+          {targetPath && (
             <Button
-              render={<a href={`#${routes.record(view.request.target.id)}`} />}
+              render={<a href={`#${targetPath}`} />}
               variant="outline"
             >
               {pages.viewRecordLink}
@@ -628,7 +659,7 @@ function RequestDetail({
         hasActions={lifecycle.length > 0 || patchAction !== undefined}
         needsReason={() => false}
         describeAction={(action) =>
-          actionDescription(action.action ?? action.name, pages)
+          actionDescription(action.action ?? action.name, pages, holder)
         }
         checkDetails={
           target &&

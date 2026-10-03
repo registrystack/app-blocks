@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { EntityModel, FieldModel } from "@registrystack/app-runtime";
 import { useModel, useRecords } from "@registrystack/app-runtime/react";
 import { Button } from "@/components/ui/button";
@@ -31,8 +31,9 @@ function useDebounced(value: string): string {
 
 /**
  * The records of a target entity a reference can be answered with, each by
- * its title, and the words for why there are none to offer. Without a search
- * it reads the entity's first page; with one, the records it matches.
+ * its title (its id where the entity has no title), and the words for why
+ * there are none to offer. Without a search it reads the entity's first page,
+ * and `more` says records lie past it; with one, the records it matches.
  */
 function useCandidates(entity: EntityModel, search: string) {
   const c = useBlockContent();
@@ -42,7 +43,7 @@ function useCandidates(entity: EntityModel, search: string) {
   });
   const options = (records.data?.items ?? []).map((record) => ({
     id: record.id,
-    title: recordTitle(entity, record.values) ?? entity.label,
+    title: recordTitle(entity, record.values) ?? record.id,
   }));
   const status = records.isPending
     ? c.loading
@@ -51,7 +52,7 @@ function useCandidates(entity: EntityModel, search: string) {
       : options.length === 0
         ? (c.referenceNoMatch ?? blockContent.referenceNoMatch)
         : undefined;
-  return { options, status };
+  return { options, status, more: !!records.data?.nextCursor };
 }
 
 type PickerProps = FieldControlProps & { entity: EntityModel };
@@ -89,10 +90,36 @@ function SearchPicker({ field, onChange, error, entity }: PickerProps) {
   );
 }
 
-/** A choice among the first page of the target's records. */
-function ChoicePicker({ field, onChange, error, entity }: PickerProps) {
+/**
+ * A choice among the target's records, when the first page holds them all. A
+ * target with more records than that, and no search to reach them, is answered
+ * with a typed identifier instead, so no record is out of reach; the identifier
+ * stays a typed one once it holds a value.
+ */
+function ChoiceReference({
+  frame,
+  chosenView,
+  chosen,
+  ...props
+}: PickerProps & {
+  frame: (children: ReactNode) => ReactNode;
+  chosenView: ReactNode;
+  chosen: boolean;
+}) {
+  const candidates = useCandidates(props.entity, "");
+  if (candidates.more) return <TypedIdentifier {...props} />;
+  return frame(
+    chosen ? chosenView : <ChoicePicker {...props} candidates={candidates} />,
+  );
+}
+
+function ChoicePicker({
+  field,
+  onChange,
+  error,
+  candidates: { options, status },
+}: PickerProps & { candidates: ReturnType<typeof useCandidates> }) {
   const c = useBlockContent();
-  const { options, status } = useCandidates(entity, "");
   return (
     <>
       <select
@@ -147,16 +174,29 @@ function TypedIdentifier({ field, value, onChange, error }: FieldControlProps) {
  * checks.
  */
 export function ReferenceControl(props: FieldControlProps) {
-  const { field, value, onChange, error } = props;
+  const { field, value, error } = props;
   const c = useBlockContent(),
     model = useModel();
   const entity = model.data?.entities.find(
     (e) => e.id === field.reference?.entity,
   );
   const chosen = typeof value === "string" && value !== "";
+  // The chosen state of the answer that focus is waiting for. Choosing a record
+  // and changing it swap the control for the other one, so focus moves to the
+  // control that replaces it, which carries the field's id in both states.
+  const [focusWhenChosen, setFocusWhenChosen] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (focusWhenChosen === null || focusWhenChosen !== chosen) return;
+    document.getElementById(field.id)?.focus();
+    setFocusWhenChosen(null);
+  });
+  const onChange: FieldControlProps["onChange"] = (next) => {
+    setFocusWhenChosen(typeof next === "string" && next !== "");
+    props.onChange(next);
+  };
   if (!model.isPending && !entity?.operations.list)
     return <TypedIdentifier {...props} />;
-  return (
+  const frame = (children: ReactNode) => (
     <FieldFrame
       name={field.id}
       label={field.label}
@@ -164,31 +204,46 @@ export function ReferenceControl(props: FieldControlProps) {
       error={error}
       required={field.required && !field.acceptsBlank}
     >
-      {model.isPending ? (
-        <p role="status">{c.loading}</p>
-      ) : chosen ? (
-        <p>
-          {/* The chosen title is text here; the page it names is not a way to answer the field. */}
-          <ReferenceHrefProvider href={() => null}>
-            <span id={`${field.id}-chosen`}>
-              <ReferenceValue field={field} value={value} />
-            </span>
-          </ReferenceHrefProvider>{" "}
-          <Button
-            type="button"
-            variant="outline"
-            id={field.id}
-            aria-describedby={`${field.id}-chosen`}
-            onClick={() => onChange(controlValue(field, ""))}
-          >
-            {c.referenceChange ?? blockContent.referenceChange}
-          </Button>
-        </p>
-      ) : !entity ? null : entity.list.search?.length ? (
-        <SearchPicker {...props} entity={entity} />
-      ) : (
-        <ChoicePicker {...props} entity={entity} />
-      )}
+      {children}
     </FieldFrame>
+  );
+  const chosenView = (
+    <p>
+      {/* The chosen title is text here; the page it names is not a way to answer the field. */}
+      <ReferenceHrefProvider href={() => null}>
+        <span id={`${field.id}-chosen`}>
+          <ReferenceValue field={field} value={value ?? ""} />
+        </span>
+      </ReferenceHrefProvider>{" "}
+      <Button
+        type="button"
+        variant="outline"
+        id={field.id}
+        aria-describedby={`${field.id}-chosen`}
+        onClick={() => onChange(controlValue(field, ""))}
+      >
+        {c.referenceChange ?? blockContent.referenceChange}
+      </Button>
+    </p>
+  );
+  if (!model.isPending && entity && !entity.list.search?.length)
+    return (
+      <ChoiceReference
+        {...props}
+        onChange={onChange}
+        entity={entity}
+        frame={frame}
+        chosenView={chosenView}
+        chosen={chosen}
+      />
+    );
+  return frame(
+    model.isPending ? (
+      <p role="status">{c.loading}</p>
+    ) : chosen ? (
+      chosenView
+    ) : !entity ? null : (
+      <SearchPicker {...props} onChange={onChange} entity={entity} />
+    ),
   );
 }

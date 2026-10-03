@@ -92,6 +92,8 @@ export interface PagesContent {
   draftDescription: string;
   submittedDescription: string;
   revisionDescription: string;
+  /** `revisionDescription` for staff reading a request that is not their own. */
+  staffRevisionDescription: string;
   approvalExpiredDescription: string;
   approvedDescription: string;
   appliedDescription: string;
@@ -99,6 +101,8 @@ export interface PagesContent {
   cancelledDescription: string;
   actionExplanation: string;
   confirmSubmit: string;
+  /** `confirmSubmit` for staff submitting on a requester's behalf. */
+  staffConfirmSubmit: string;
   confirmApply: string;
   confirmRevision: string;
   confirmRebase: string;
@@ -107,6 +111,8 @@ export interface PagesContent {
   reviewApprovedPendingApplicationBody: string;
   submittedReviewDescription: string;
   revisionReason: string;
+  /** `revisionReason` for staff, who are not the one asked to correct. */
+  staffRevisionReason: string;
   rejectionReason: string;
   viewRecordLink: string;
   editDraft: string;
@@ -176,6 +182,8 @@ export interface PagesContent {
   queueFilteredEmptyTitle: string;
   queueFilteredEmptyBody: string;
   queueRecoveredAnnouncement: string;
+  /** Announced when an expired page reference returns a record list to its first page. */
+  listRecoveredAnnouncement: string;
 }
 
 export const pagesContent: PagesContent = {
@@ -261,6 +269,8 @@ export const pagesContent: PagesContent = {
     "Your request is awaiting review. The recorded values have not changed.",
   revisionDescription:
     "The reviewer has asked for a revision. Use the available revise action to prepare a new draft, then check and submit it again.",
+  staffRevisionDescription:
+    "The reviewer sent this request back to the requester to change. The recorded values have not changed.",
   approvalExpiredDescription:
     "The approval expired before it was applied. The recorded values have not changed. Revise the proposal to send it for review again, or cancel it.",
   approvedDescription:
@@ -273,6 +283,8 @@ export const pagesContent: PagesContent = {
   actionExplanation: "Choose a permitted action for this request.",
   confirmSubmit:
     "Send this proposal to a reviewer. You will be able to edit it again only when the workflow permits.",
+  staffConfirmSubmit:
+    "Send this proposal to a reviewer. It can be edited again only when the workflow permits.",
   confirmApply:
     "Applying this approved proposal changes the values recorded for this record according to the reviewed proposal.",
   confirmRevision:
@@ -286,6 +298,7 @@ export const pagesContent: PagesContent = {
   submittedReviewDescription:
     "This proposal is awaiting review. The record has not changed.",
   revisionReason: "What the reviewer asked to correct",
+  staffRevisionReason: "What the reviewer asked the requester to correct",
   rejectionReason: "Why the reviewer rejected this request",
   viewRecordLink: "View record",
   editDraft: "Edit draft",
@@ -365,6 +378,8 @@ export const pagesContent: PagesContent = {
     "Remove one of these filters, or clear all of them, to see more requests.",
   queueRecoveredAnnouncement:
     "That page reference had expired, so the queue returned to the first page.",
+  listRecoveredAnnouncement:
+    "That page reference had expired, so the list returned to the first page.",
 };
 
 const PagesContentContext = createContext<PagesContent>(pagesContent);

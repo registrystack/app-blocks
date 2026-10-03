@@ -121,7 +121,7 @@ export function DecisionPanel({
   const c = useCaseworkContent();
   const sendBack = useSendBack(task.taskId);
   const { decision, note } = sendBack;
-  const [chosen, setChosen] = useState("");
+  const [picked, setPicked] = useState("");
   const [reason, setReason] = useState("");
   const [requesterNote, setRequesterNote] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
@@ -162,6 +162,8 @@ export function DecisionPanel({
   ];
   const blocked = offered.filter((option) => option.plan?.blocked);
   const choices = offered.filter((option) => !option.plan?.blocked);
+  // A choice a re-read withdrew or blocked no longer counts as chosen.
+  const chosen = choices.some((option) => option.id === picked) ? picked : "";
   const plan = choices.find((option) => option.id === chosen)?.plan;
   const reasonRequired = plan?.reasonRequired ?? false;
   // A request sent back for changes carries a note its requester reads; a
@@ -191,6 +193,7 @@ export function DecisionPanel({
     setErrors(found);
     setWhole("");
     if (Object.keys(found).length) return;
+    // Only the approve choice has no plan; `chosen` is a current choice here.
     const next: ReviewDecision = plan
       ? {
           type: decisionTypes[plan.outcome.settlement],
@@ -273,7 +276,7 @@ export function DecisionPanel({
                     id={`review-choice-${option.id}`}
                     name="review-outcome"
                     checked={chosen === option.id}
-                    onChange={() => setChosen(option.id)}
+                    onChange={() => setPicked(option.id)}
                   />
                   <span>{option.label}</span>
                 </label>
@@ -370,6 +373,11 @@ export function DraftPanel({
   const { draft, save, remove } = useReviewDraft(task.taskId);
   const [text, setText] = useState<string | null>(null);
   const value = text ?? draftText(draft.data?.body);
+  // Once a delete is confirmed the field shows the (now empty) stored draft,
+  // not the text typed before it.
+  useEffect(() => {
+    if (remove.state.state === "confirmed") setText(null);
+  }, [remove.state.state]);
   return (
     <section className="review-draft">
       <h2>{c.draftHeading}</h2>

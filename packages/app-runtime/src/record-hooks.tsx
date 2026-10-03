@@ -9,9 +9,9 @@ import type { CommandTarget } from "./commands.js";
 import type { JsonValue, RecordActionReference, RecordView } from "./model.js";
 import { useModel, useRecord } from "./react.js";
 import {
+  actionKeys,
   applyTask,
   formValues,
-  recordKeys,
   recordTask,
   recordTaskCommand,
   type RecordCommandInput,
@@ -30,7 +30,7 @@ export function useRecordCommand(
   const command = useCommand(
     {
       ...recordTaskCommand,
-      invalidates: (_value, scope) => recordKeys(scope, action.entity, target),
+      invalidates: (_value, scope) => actionKeys(scope, action, target),
     },
     target,
   );

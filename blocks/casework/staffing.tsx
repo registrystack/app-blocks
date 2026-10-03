@@ -398,7 +398,12 @@ export function CaseworkAssignmentForm({
     active ? { purpose: "assignment", queue: item.queue, limit: "100" } : null,
   );
   const [announcement, announce] = useAnnouncement();
-  const [actionRef, setActionRef] = useState(actions[0]?.ref ?? "");
+  // The chosen action is kept by name: every read of the item withdraws its
+  // references and mints new ones, so a reference held here would go stale.
+  const [actionName, setActionName] = useState(actions[0]?.name);
+  const chosenAction =
+    actions.find((action) => action.name === actionName) ?? actions[0];
+  const actionRef = chosenAction?.ref ?? "";
   const [targetRef, setTargetRef] = useState("");
   const [reason, setReason] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -444,7 +449,10 @@ export function CaseworkAssignmentForm({
               name="staffing-action"
               label={c.assignmentAction}
               value={actionRef}
-              onChange={setActionRef}
+              onChange={(ref) => {
+                const next = actions.find((action) => action.ref === ref);
+                if (next) setActionName(next.name);
+              }}
               error={errors["staffing-action"]}
               options={actions.map((action) => ({
                 value: action.ref,
@@ -473,10 +481,7 @@ export function CaseworkAssignmentForm({
           {!command.locked && (
             <Button type="submit">
               {
-                c.actionLabels[
-                  actions.find((action) => action.ref === actionRef)?.name ??
-                    actions[0]!.name
-                ]
+                c.actionLabels[(chosenAction ?? actions[0]!).name]
               }
             </Button>
           )}
