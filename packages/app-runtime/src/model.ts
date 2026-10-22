@@ -13,7 +13,7 @@ import type {
 export type JsonValue =
   string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
-/** One JSON Schema document, as the registry or a review kind serves it. */
+/** One JSON Schema document, as the registry or a review policy serves it. */
 export type JsonSchema = { [key: string]: JsonValue };
 
 export interface RegistryModel {
@@ -25,11 +25,59 @@ export interface RegistryModel {
   entities: EntityModel[];
   /**
    * The record entities a staff app offers as places, in order; every record
-   * entity the session reads when absent.
+   * entity the session lists or looks up, in the model's order, when absent;
+   * the ones it reads by identifier where it does neither. Empty when the UI
+   * model names places and the session reads none of them.
    */
   places?: string[];
   /** The list a session opens on, when the UI model names one for its role. */
   home?: HomeView;
+  /** How the UI model shows Casework review queues and review contexts. */
+  casework?: CaseworkModel;
+  /**
+   * The kit wording the UI model sets in the model's language, by message id
+   * (`<area>.<key>`); an id left out keeps the app's wording or the kit's English.
+   */
+  messages?: Record<string, string>;
+  /** The accent colour and description the UI model sets, in the model's language. */
+  branding?: { accent?: string; description?: string };
+}
+
+/** The task fields a review queue row can show as a column; Casework serves each. */
+export const reviewQueueColumns = [
+  "reference",
+  "kind",
+  "queue",
+  "due",
+  "waiting",
+  "status",
+  "supporting",
+] as const;
+export type ReviewQueueColumn = (typeof reviewQueueColumns)[number];
+
+/** The narrowings of a review queue that Casework serves: its owner and its queue. */
+export const reviewQueueFilters = ["owner", "queue"] as const;
+export type ReviewQueueFilter = (typeof reviewQueueFilters)[number];
+
+/** The columns and filters of one review queue view; absent keys read as the inbox's. */
+export interface ReviewQueueView {
+  columns?: ReviewQueueColumn[];
+  filters?: ReviewQueueFilter[];
+}
+
+/**
+ * The UI model's choices among what Casework serves. They narrow and order
+ * what a worker already sees; none of them reaches a field Casework does not
+ * serve to that worker.
+ */
+export interface CaseworkModel {
+  /** The review inbox: its columns and filters, and a queue's own when it differs. */
+  inbox?: ReviewQueueView & { queues?: Record<string, ReviewQueueView> };
+  /**
+   * The fields of a review policy's display projection a reviewer reads, in
+   * order, keyed by policy id. A name outside the projection is not shown.
+   */
+  context?: Record<string, string[]>;
 }
 
 /**
@@ -39,6 +87,8 @@ export interface RegistryModel {
 export interface HomeView {
   entity: string;
   filters?: Record<string, string | null>;
+  /** The ids of what the role's home list offers to start: record types and actions. */
+  starts?: string[];
 }
 
 export interface EntityModel {
@@ -49,6 +99,8 @@ export interface EntityModel {
   createDescription?: string;
   /** A request entity changes other records through its declared effects. */
   kind: "record" | "request";
+  /** False keeps an entry-bound request out of standalone navigation. */
+  navigation?: boolean;
   fields: FieldModel[];
   sections: { id: string; label: string; fields: string[] }[];
   /** The field a record is named by. */
@@ -75,21 +127,55 @@ export interface EntityModel {
   context?: string[];
   operations: {
     create?: boolean;
+    /** The session may read one record by its exact identifier. */
+    get?: boolean;
     /** The session may list the entity's records, so a reference to one can be picked. */
     list?: boolean;
     patch?: boolean;
     revisions?: boolean;
+    /** The session may find a record from what a person holds, without listing or reading by identifier. */
+    lookup?: LookupModel;
     attachments?: { slot: string; label: string }[];
   };
-  /** Cross-field checks a form applies before anything is sent. */
-  rules: FieldRule[];
   request?: RequestModel;
+}
+
+/**
+ * How a session finds one record from what a person holds: the selectors it
+ * may fill in, each by its own fields, and the fields a match discloses.
+ * Only selectors whose values the person types are listed; BReg fills the
+ * others from the session's verified claims.
+ */
+export interface LookupModel {
+  selectors: {
+    id: string;
+    label: string;
+    /**
+     * Set when the label is the one BReg derives from the selector id, which
+     * names no record type; absent when the UI model words the selector.
+     */
+    derived?: true;
+    /**
+     * Each field the person fills in, with the JSON Schema type of its value:
+     * the host sends a whole number and a yes or no as JSON, and any other
+     * value as the text typed.
+     */
+    fields: {
+      id: string;
+      label: string;
+      required: boolean;
+      type: "string" | "integer" | "number" | "boolean";
+    }[];
+  }[];
+  /** The ids of the fields a match shows, in the entity's field order. */
+  disclosed: string[];
 }
 
 /**
  * The JSON Schema type a field is shown and entered as. `group` is a
  * repeatable list of items, each a fixed set of scalar sub-fields;
- * `structured` is a single object of such sub-fields.
+ * `structured` is a single object of such sub-fields, and `crs84-point` is
+ * the native GeoJSON Point shape with longitude before latitude.
  */
 export type FieldType =
   | "string"
@@ -99,7 +185,8 @@ export type FieldType =
   | "array"
   | "object"
   | "group"
-  | "structured";
+  | "structured"
+  | "crs84-point";
 
 export interface FieldOption {
   value: string;
@@ -131,19 +218,25 @@ export interface FieldModel {
   emptyLabel?: string;
   reference?: { entity: string };
   /**
+   * How an action input is answered, when the UI model says: typed in,
+   * chosen from the directory of the record type it refers to, or taken from
+   * the record the action starts from. Absent where it says nothing.
+   */
+  fill?: "enter" | "choose" | "record";
+  /**
+   * The record field an action input is filled from: the `field` of the
+   * `entity` record chosen in the reference input `input` of the same action.
+   * The host reads it when the record is chosen; the form shows it read-only
+   * and submits it as read.
+   */
+  fillFrom?: { input: string; entity: string; field: string };
+  /**
    * A `group` field's item shape, or a `structured` field's own: one
    * sub-field per scalar property the object carries. A sub-field that is
    * itself a nested array, object or reference is read-only; the kit renders
    * it, it never guesses how to edit it.
    */
   items?: readonly FieldModel[];
-}
-
-/** The field's value must not be before the other field's value. */
-export interface FieldRule {
-  field: string;
-  notBefore: string;
-  message?: string;
 }
 
 export type RequestState =
@@ -156,10 +249,20 @@ export type RequestState =
   | "cancelled"
   | "approval-expired";
 
-/** A lifecycle action on a request, named without BREG's `_request` suffix. */
+/** A lifecycle action on a request, named without BReg's `_request` suffix. */
 export type RequestAction = "submit" | "cancel" | "revise" | "rebase" | "apply";
 
 export interface RequestModel {
+  /**
+   * The record page this request starts from. `fromField` is the governed
+   * reference input the host binds to that record.
+   */
+  entry?: { entity: string; fromField: string };
+  /**
+   * Whether this session's request list can be narrowed to the record named by
+   * `target`. Absent means unsupported, for compatibility with an older host.
+   */
+  listByTarget?: boolean;
   /**
    * The records a request changes. `fromField` names the request field that
    * holds the target's id; a target with neither binding is created, and one
@@ -177,8 +280,10 @@ export interface RequestModel {
     requestField?: string;
     targetField: string;
   }[];
-  onApproved: "manual" | "automatic";
-  reviewed: boolean;
+  /** How an approved request is applied; absent where the contract does not say. */
+  onApproved?: "manual" | "automatic";
+  /** Whether a request is reviewed before it applies; absent where the contract does not say. */
+  reviewed?: boolean;
   stateLabels: Record<RequestState, string>;
   /** The states a list of these requests can be filtered by, in display order. */
   filterableStates: RequestState[];
@@ -190,6 +295,14 @@ export interface RecordView {
   revision: string;
   values: Record<string, JsonValue>;
   actions: RecordActionReference[];
+  /**
+   * The governed actions that add a record referring to this one which the
+   * registry answers it would refuse with this record as that reference,
+   * keyed by action id. The page shows each disabled, with its reason, where
+   * it offers it beside the records that refer to this one. Absent when there
+   * are none.
+   */
+  relatedActionAvailability?: Record<string, ActionUnavailability>;
   /** Governed document slots this session may see; absent when none are declared. */
   attachments?: AttachmentSlot[];
   request?: RequestView;
@@ -198,6 +311,28 @@ export interface RecordView {
 export interface RequestView {
   state: RequestState;
   review?: ChangeRequestReview;
+  /** Native application progress when this request has no separate review status. */
+  application?: {
+    mode: "automatic" | "manual";
+    state: string;
+    reason?: string;
+    recovery?: string;
+    attempts?: number;
+  };
+  /**
+   * Present when BReg reports the request's review status unavailable, with
+   * the reason and recovery it named. The words are BReg's; the browser never
+   * classifies them.
+   */
+  reviewUnavailable?: { reason: string; recovery: string };
+  /**
+   * When an applied request was applied and by which actor reference, each
+   * only when BReg serves it to this profile. An actor reference is a keyed
+   * pseudonym, not a name.
+   */
+  applied?: { at?: string; by?: string };
+  /** The readable record this request was started from. */
+  entry?: { entity: string; id: string; available: boolean };
   /** The record this request changes, and whether this session could read it. */
   target?: { entity: string; id: string; available: boolean };
   /** The target's current values for each field the request writes. */
@@ -207,6 +342,8 @@ export interface RequestView {
    * field it was verified for. The retained artifact itself is never served.
    */
   evidence?: VerifiedEvidenceDisplay & { field: string };
+  /** Records BReg says this applied submission produced. */
+  results?: { entity: string; id: string; revision: number }[];
 }
 
 /**
@@ -250,6 +387,20 @@ export interface RecordActionReference {
   actionId?: string;
   label?: string;
   fields?: FieldModel[];
+  /**
+   * Present only on a governed action offered on a record when the registry
+   * answers that it would refuse the action for that record now. The page
+   * shows the action disabled, with its reason; the registry still decides
+   * at commit.
+   */
+  availability?: ActionUnavailability;
+}
+
+/** The registry's answer that it would refuse an action for a record now. */
+export interface ActionUnavailability {
+  available: false;
+  reason: string;
+  recovery: string;
 }
 
 export type RecordTask =

@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useCaseworkContent, type CaseworkContent } from "@/blocks/casework/casework-content";
 import { caseworkDateTime, caseworkPerson, Loading } from "@/blocks/casework/shared";
+import { useLocale } from "@/blocks/lib/content";
 import { fill } from "@/blocks/lib/format";
 
 /**
@@ -33,15 +34,21 @@ function useHistoryKind(): (kind: string) => string {
   };
 }
 
-/** What a failed read of who decided says: a supervisor's reading only, or no such record, or the problem itself. */
+/**
+ * What a failed read of who decided says: a supervisor's reading only, or no such
+ * record, or the host's own words for the problem, or, with none, that it could not
+ * be read.
+ */
 export function accountabilityErrorText(c: CaseworkContent, error: Error) {
   if (notAuthorized(error)) return c.accountabilityUnavailable;
-  if (problemView(error).kind === "unavailable") return c.accountabilityNotFound;
-  return error.message;
+  const problem = problemView(error);
+  if (problem.kind === "unavailable") return c.accountabilityNotFound;
+  return problem.message ?? c.accountabilityNotRead;
 }
 
 function Accountability({ entry }: { entry: ReviewHistoryEntry }) {
   const c = useCaseworkContent();
+  const locale = useLocale();
   const [asked, setAsked] = useState(false);
   const record = useReviewAccountability(entry.eventId, asked);
   if (!asked)
@@ -59,11 +66,15 @@ function Accountability({ entry }: { entry: ReviewHistoryEntry }) {
   if (!record.data) return <Loading />;
   return (
     <span>
-      {fill(c.accountabilityLine, {
-        person: caseworkPerson(record.data.actor),
-        profile: record.data.profileId,
-        decision: record.data.decision,
-      })}
+      {fill(
+        c.accountabilityLine,
+        {
+          person: caseworkPerson(record.data.actor),
+          profile: record.data.profileId,
+          decision: record.data.decision,
+        },
+        locale,
+      )}
     </span>
   );
 }
@@ -78,6 +89,7 @@ export function HistoryPanel({
   renderError: (error: unknown, retry: () => void) => ReactNode;
 }) {
   const c = useCaseworkContent();
+  const locale = useLocale();
   const session = useAuthority();
   const kindWords = useHistoryKind();
   const history = useReviewHistory(requestId);
@@ -95,7 +107,10 @@ export function HistoryPanel({
           <li key={entry.eventId}>
             <span>{kindWords(entry.kind)}</span>
             {entry.byYou && <span> {c.historyByYou}</span>}
-            <span className="muted"> {caseworkDateTime(entry.occurredAt)}</span>
+            <span className="muted">
+              {" "}
+              {caseworkDateTime(entry.occurredAt, locale)}
+            </span>
             {entry.kind === "review_decided" &&
               session.caseworkProfile === "supervisor" && (
                 <>
@@ -134,6 +149,7 @@ export function ClocksPanel({
   renderError: (error: unknown, retry: () => void) => ReactNode;
 }) {
   const c = useCaseworkContent();
+  const locale = useLocale();
   const clocks = useReviewClocks(requestId);
   return (
     <section>
@@ -148,10 +164,15 @@ export function ClocksPanel({
         <ul>
           {clocks.data.map((clock, index) => (
             <li key={clock.clockOccurrenceId}>
-              {fill(c.clockName, { number: index + 1 })}:{" "}
-              {c.clockStates[clock.state] ?? clock.state}
-              {clock.dueAt &&
-                ` ${fill(c.clockDue, { time: caseworkDateTime(clock.dueAt) })}`}
+              {fill(
+                clock.dueAt ? c.clockLineDue : c.clockLine,
+                {
+                  name: fill(c.clockName, { number: String(index + 1) }, locale),
+                  state: c.clockStates[clock.state] ?? clock.state,
+                  time: clock.dueAt ? caseworkDateTime(clock.dueAt, locale) : "",
+                },
+                locale,
+              )}
             </li>
           ))}
         </ul>

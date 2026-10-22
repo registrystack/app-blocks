@@ -1,25 +1,36 @@
 import type { CaseworkTaskBounds } from "@registrystack/app-runtime";
 import {
-  useCaseworkTaskGrants,
   useReviewTaskGrants,
   useTaskGrantPanel,
   type TaskGrantCalls,
   type TaskGrantNotice,
   type TaskGrantProblem,
 } from "@registrystack/app-runtime/react";
-import { fill } from "@/blocks/lib/format";
+import { useBlockContent, useLocale } from "@/blocks/lib/content";
+import { fill, listOf } from "@/blocks/lib/format";
 import { Button } from "@/components/ui/button";
 import { useCaseworkContent, type CaseworkContent } from "@/blocks/casework/casework-content";
 import { caseworkDateTime } from "@/blocks/casework/shared";
 
 function Bounds({ bounds }: { bounds: CaseworkTaskBounds }) {
+  const c = useCaseworkContent();
+  const b = useBlockContent();
+  const locale = useLocale();
   if (bounds.type === "evidence") return <span>{bounds.requirement}</span>;
   if (bounds.type === "scheduling")
     return (
       <ul>
         {bounds.permissions.map((p) => (
           <li key={`${p.service}/${p.location}`}>
-            {p.service} / {p.location}: {p.actions.join(", ")}
+            {fill(
+              c.taskGrantPermission,
+              {
+                service: p.service,
+                location: p.location,
+                actions: listOf(p.actions, locale),
+              },
+              locale,
+            )}
           </li>
         ))}
       </ul>
@@ -28,21 +39,15 @@ function Bounds({ bounds }: { bounds: CaseworkTaskBounds }) {
     <ul>
       {bounds.permissions.map((p) => (
         <li key={p.collection}>
-          {p.collection}: {p.operations.join(", ")}
+          {fill(
+            b.labelled,
+            { label: p.collection, value: listOf(p.operations, locale) },
+            locale,
+          )}
         </li>
       ))}
     </ul>
   );
-}
-
-/** The agent tasks on one Casework work item. */
-export function CaseworkTaskGrants(props: {
-  id: string;
-  revision: string;
-  blocked: boolean;
-}) {
-  const { calls, approval } = useCaseworkTaskGrants(props.id);
-  return <TaskGrantsPanel {...props} calls={calls} approval={approval} />;
 }
 
 /** The agent tasks on one review task, approved through the review task's own routes. */
@@ -83,6 +88,8 @@ function TaskGrantsPanel({
   approval: Approval;
 }) {
   const c = useCaseworkContent();
+  const b = useBlockContent();
+  const locale = useLocale();
   const panel = useTaskGrantPanel({ id, revision, blocked, calls, approval });
   const {
     open,
@@ -100,7 +107,7 @@ function TaskGrantsPanel({
     revoke,
     dispatch,
   } = panel;
-  // BREG and Casework still enforce who may use agent tasks. Hiding the button
+  // BReg and Casework still enforce who may use agent tasks. Hiding the button
   // only stops the page offering a dead end: a panel that would open on the
   // refusal the officer already got.
   if (!panel.offered) return null;
@@ -111,7 +118,7 @@ function TaskGrantsPanel({
       <Button variant="outline" aria-expanded={open} onClick={panel.toggle}>
         {listed === null
           ? c.taskHeading
-          : fill(c.taskHeadingCount, { count: String(listed) })}
+          : fill(c.taskHeadingCount, { count: String(listed) }, locale)}
       </Button>
       {open && (
         <div className="space-y-4 py-4">
@@ -121,7 +128,7 @@ function TaskGrantsPanel({
             <div role="alert" className="space-y-2">
               <p>{c.taskUnconfirmed}</p>
               {approval.state.state === "unknown" &&
-                approval.state.lastRefusal && (
+                approval.state.lastRefusal?.message && (
                   <p>{approval.state.lastRefusal.message}</p>
                 )}
               {!(
@@ -159,7 +166,7 @@ function TaskGrantsPanel({
                   disabled={pending}
                   onClick={() => panel.select(template)}
                 >
-                  {fill(c.taskReview, { label: template.label })}
+                  {fill(c.taskReview, { label: template.label }, locale)}
                 </Button>
               </div>
             ))}
@@ -173,7 +180,7 @@ function TaskGrantsPanel({
                   [c.taskClient, selected.client],
                   [c.taskResource, selected.resource],
                   [c.taskPurpose, selected.purpose],
-                  [c.taskScopes, selected.scopes.join(", ")],
+                  [c.taskScopes, listOf(selected.scopes, locale)],
                   ...(selected.evidenceContext
                     ? [
                         [
@@ -182,7 +189,7 @@ function TaskGrantsPanel({
                         ],
                         [
                           c.taskRequesterTags,
-                          selected.evidenceContext.requesterTags.join(", "),
+                          listOf(selected.evidenceContext.requesterTags, locale),
                         ],
                       ]
                     : []),
@@ -209,9 +216,11 @@ function TaskGrantsPanel({
                 ))}
               </dl>
               <p>
-                {fill(c.taskDuration, {
-                  minutes: String(selected.lifetimeSeconds / 60),
-                })}
+                {fill(
+                  c.taskDuration,
+                  { minutes: String(selected.lifetimeSeconds / 60) },
+                  locale,
+                )}
               </p>
               <Button
                 disabled={pending || approval.locked}
@@ -235,16 +244,33 @@ function TaskGrantsPanel({
               <p>{grant.purpose}</p>
               <p>{grant.resource}</p>
               <p>
-                {c.taskScopes}: {grant.scopes.join(", ")}
+                {fill(
+                  b.labelled,
+                  { label: c.taskScopes, value: listOf(grant.scopes, locale) },
+                  locale,
+                )}
               </p>
               {grant.evidenceContext && (
                 <>
                   <p>
-                    {c.taskEvidenceAudience}: {grant.evidenceContext.audience}
+                    {fill(
+                      b.labelled,
+                      {
+                        label: c.taskEvidenceAudience,
+                        value: grant.evidenceContext.audience,
+                      },
+                      locale,
+                    )}
                   </p>
                   <p>
-                    {c.taskRequesterTags}:{" "}
-                    {grant.evidenceContext.requesterTags.join(", ")}
+                    {fill(
+                      b.labelled,
+                      {
+                        label: c.taskRequesterTags,
+                        value: listOf(grant.evidenceContext.requesterTags, locale),
+                      },
+                      locale,
+                    )}
                   </p>
                 </>
               )}
@@ -254,11 +280,16 @@ function TaskGrantsPanel({
                   ? c.taskInvalidated
                   : grant.expiresAt * 1000 <= Date.now()
                     ? c.taskExpired
-                    : fill(c.taskUntil, {
-                        time: caseworkDateTime(
-                          new Date(grant.expiresAt * 1000).toISOString(),
-                        ),
-                      })}
+                    : fill(
+                        c.taskUntil,
+                        {
+                          time: caseworkDateTime(
+                            new Date(grant.expiresAt * 1000).toISOString(),
+                            locale,
+                          ),
+                        },
+                        locale,
+                      )}
               </p>
               {!grant.invalidated && grant.expiresAt * 1000 > Date.now() && (
                 <>

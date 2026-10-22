@@ -12,9 +12,15 @@ export function RecordSections({
   return (
     <>
       {entity.sections.map((section) => (
-        <section className="card" key={section.id}>
+        <section className="card section-card" key={section.id}>
           <h2>{section.label}</h2>
-          <RecordFacts entity={entity} record={record} fields={section.fields} />
+          <div className="section-card-body">
+            <RecordFacts
+              entity={entity}
+              record={record}
+              fields={section.fields}
+            />
+          </div>
         </section>
       ))}
     </>

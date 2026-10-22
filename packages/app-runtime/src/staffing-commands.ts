@@ -1,16 +1,14 @@
 /**
- * The staffing writes: an assignment, a cover saved or ended, and a movement of a
- * person's caseload. Each is sent through the session's retained commands; a resend is
- * the same attempt, never a second one.
+ * The staffing writes: a cover saved or ended, and a movement of a person's caseload.
+ * Each is sent through the session's retained commands; a resend is the same attempt,
+ * never a second one.
  */
 import type { CommandSpec } from "./command-hooks.js";
 import type { CommandState, RefusalKind } from "./commands.js";
 import type { HostClient } from "./index.js";
 import type {
   CaseworkStaffingApplyCaseload,
-  CaseworkStaffingAssignCommand,
   CaseworkStaffingCaseloadPreviewInput,
-  CaseworkStaffingCaseloadPreviewPage,
   CaseworkStaffingCreateAbsence,
   CaseworkStaffingDeleteAbsence,
   CaseworkStaffingUpdateAbsence,
@@ -66,13 +64,6 @@ const absenceQueries: CommandSpec<unknown, unknown>["invalidates"] = (
   scope,
 ) => [[scope, "casework-staffing-absences"]];
 
-/** One assignment per work item, from its form or from a reassignment. */
-export const assignmentCommand = staffingCommand(
-  "staffing-assignment",
-  "assign",
-  (host, command: CaseworkStaffingAssignCommand) =>
-    host.staffingAssign(command),
-);
 /** Recording a new cover, or changing the dates or colleague of one. */
 export const absenceSaveCommand = staffingCommand(
   "staffing-absence",
@@ -93,7 +84,10 @@ export const absenceEndCommand = staffingCommand(
     host.staffingDeleteAbsence(command),
   absenceQueries,
 );
-/** One movement per person and queue; Casework answers for each item in it. */
+/**
+ * One movement per person and queue. It names the preview alone: Casework moves exactly
+ * the set of review tasks that preview fenced, all at once.
+ */
 export const caseloadCommand = staffingCommand(
   "staffing-caseload",
   "apply",
@@ -102,7 +96,6 @@ export const caseloadCommand = staffingCommand(
 );
 /** One per scope: a retry is sent by its attempt alone, whatever the kind. */
 export const staffingCommands = [
-  assignmentCommand,
   absenceSaveCommand,
   absenceEndCommand,
   caseloadCommand,
@@ -129,23 +122,5 @@ export function commandUnresolved(state: CommandState<unknown>): boolean {
   return state.state === "unknown" || state.state === "recovering";
 }
 
-/** The movement a caseload preview asks about, without its page. */
-export type CaseloadPreviewInput = Omit<
-  CaseworkStaffingCaseloadPreviewInput,
-  "cursor" | "previewRef"
->;
-/**
- * One page of a caseload preview. A continuation names the preview its first page
- * issued, so every page belongs to the same movement.
- */
-export function caseloadPreviewRequest(
-  input: CaseloadPreviewInput,
-  cursor: string | undefined,
-  pages: readonly CaseworkStaffingCaseloadPreviewPage[],
-): CaseworkStaffingCaseloadPreviewInput {
-  return {
-    ...input,
-    cursor,
-    ...(cursor && pages[0] ? { previewRef: pages[0].previewRef } : {}),
-  };
-}
+/** The movement a caseload preview asks about. */
+export type CaseloadPreviewInput = CaseworkStaffingCaseloadPreviewInput;

@@ -20,7 +20,12 @@ import {
   useRememberedState,
   type BrowserMemory,
 } from "@registrystack/app-runtime/react";
-import { useCaseworkContent } from "@/blocks/casework/casework-content";
+import {
+  useCaseworkContent,
+  type CaseworkContent,
+} from "@/blocks/casework/casework-content";
+import { useLocale } from "@/blocks/lib/content";
+import { fill } from "@/blocks/lib/format";
 
 /**
  * Keyboard shortcuts for the work shell. A single key fires only while no
@@ -164,22 +169,31 @@ export function useShortcut(
   }, [register, key, label, chord, active]);
 }
 
-/** The modifier key as this platform names it. */
-export function modifierLabel(): string {
+/** The modifier key as this platform names it; the Mac symbol is a symbol, the other is `shortcutControl`. */
+export function modifierLabel(
+  c: Pick<CaseworkContent, "shortcutControl">,
+): string {
   return typeof navigator !== "undefined" &&
     /Mac|iPhone|iPad/.test(navigator.platform)
     ? "⌘"
-    : "Ctrl";
+    : c.shortcutControl;
 }
 
-function keyLabel(shortcut: Shortcut): string {
+/** A shortcut's keys as the help list shows them: the key, with the modifier before it for a chord. */
+export function keyLabel(
+  shortcut: Shortcut,
+  c: CaseworkContent,
+  locale: string,
+): string {
   const key =
     shortcut.key === " "
-      ? "Space"
+      ? c.shortcutSpace
       : shortcut.key.length === 1
         ? shortcut.key.toUpperCase()
         : shortcut.key;
-  return shortcut.chord === "mod" ? `${modifierLabel()} ${key}` : key;
+  return shortcut.chord === "mod"
+    ? fill(c.shortcutChord, { modifier: modifierLabel(c), key }, locale)
+    : key;
 }
 
 /** The list of every shortcut bound right now, opened with `?`. */
@@ -191,6 +205,7 @@ export function ShortcutsHelp({
   onOpenChange: (open: boolean) => void;
 }) {
   const c = useCaseworkContent();
+  const locale = useLocale();
   const { shortcuts } = useShortcutsContext();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -210,7 +225,7 @@ export function ShortcutsHelp({
             {shortcuts.map((shortcut) => (
               <tr key={`${shortcut.chord ?? ""}${shortcut.key}`}>
                 <td>
-                  <Kbd>{keyLabel(shortcut)}</Kbd>
+                  <Kbd>{keyLabel(shortcut, c, locale)}</Kbd>
                 </td>
                 <td>{shortcut.label}</td>
               </tr>

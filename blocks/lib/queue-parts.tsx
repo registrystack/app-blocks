@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Loading } from "@/blocks/shell/loading";
-import { useBlockContent } from "@/blocks/lib/content";
+import { useBlockContent, useLocale } from "@/blocks/lib/content";
 import { useCaseworkContent } from "@/blocks/casework/casework-content";
 import { fill } from "@/blocks/lib/format";
 
@@ -154,6 +154,7 @@ export function QueueFilterChips({
   onClear?: () => void;
 }) {
   const c = useCaseworkContent();
+  const locale = useLocale();
   if (filters.length === 0) return null;
   return (
     <ul className="filter-chips">
@@ -162,7 +163,7 @@ export function QueueFilterChips({
           <span>{filter.label}</span>
           <button
             type="button"
-            aria-label={fill(c.removeFilter, { label: filter.label })}
+            aria-label={fill(c.removeFilter, { label: filter.label }, locale)}
             onClick={() => onRemove(filter)}
           >
             ×
@@ -209,10 +210,11 @@ export function QueueResultCount({
   count: number;
 }) {
   const c = useCaseworkContent();
+  const locale = useLocale();
   if (count === 0) return null;
   return (
     <p className="result-count">
-      {fill(c.showingRange, { start, end: start + count - 1 })}
+      {fill(c.showingRange, { start, end: start + count - 1 }, locale)}
     </p>
   );
 }
@@ -313,6 +315,7 @@ export function QueuePager({
 }) {
   const b = useBlockContent();
   const c = useCaseworkContent();
+  const locale = useLocale();
   // The size select's options name themselves ("25 per page"), so its label
   // is for assistive technology only; Previous and Next are chevrons whose
   // names are the same words in text a screen reader reads.
@@ -332,7 +335,7 @@ export function QueuePager({
     <div className="pager flex-row items-center">
       <div>
         <label htmlFor={sizeId} className="sr-only">
-          {fill(c.perPage, { size })}
+          {fill(c.perPage, { size }, locale)}
         </label>
         <select
           id={sizeId}
@@ -342,7 +345,7 @@ export function QueuePager({
         >
           {PAGE_SIZES.map((option) => (
             <option key={option} value={String(option)}>
-              {fill(c.perPage, { size: option })}
+              {fill(c.perPage, { size: option }, locale)}
             </option>
           ))}
         </select>

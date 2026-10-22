@@ -9,6 +9,8 @@ import { Notice } from "@/blocks/lib/notice";
  * since they may name the reviewing service and the record kind. The
  * operator-attention body is taken from `operatorAttentionBodies` by the
  * recovery's code when it has one, and from `operatorAttentionBody` otherwise.
+ * A no-review request uses the same operator notice when native automatic
+ * application stops blocked.
  */
 export function ReviewRecoveryNotices({
   request,
@@ -30,25 +32,30 @@ export function ReviewRecoveryNotices({
   operatorAttentionBodies?: Readonly<Record<string, string>>;
 }) {
   const review = request?.review;
-  if (!review) return null;
-  const code = review.recovery.code;
+  const recovery =
+    review?.recovery ??
+    (request?.application?.state === "blocked"
+      ? { state: "operatorAttention", code: request.application.reason }
+      : undefined);
+  if (!review && !recovery) return null;
+  const code = recovery?.code;
   const keyedBody =
     code !== undefined && Object.hasOwn(operatorAttentionBodies, code)
       ? operatorAttentionBodies[code]
       : undefined;
   return (
     <>
-      {review.submission.state === "cancelling" && (
+      {review?.submission.state === "cancelling" && (
         <Notice tone="warning" title={withdrawalPendingTitle}>
           <p>{withdrawalPendingBody}</p>
         </Notice>
       )}
-      {review.submission.state === "uncertain" && (
+      {review?.submission.state === "uncertain" && (
         <Notice tone="warning" title={submissionUnknownTitle}>
           <p>{submissionUnknownBody}</p>
         </Notice>
       )}
-      {review.recovery.state === "operatorAttention" && (
+      {recovery?.state === "operatorAttention" && (
         <Notice tone="warning" title={operatorAttentionTitle}>
           <p>{keyedBody ?? operatorAttentionBody}</p>
         </Notice>

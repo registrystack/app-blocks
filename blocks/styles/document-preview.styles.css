@@ -16,7 +16,7 @@
   margin: 0;
 }
 .document-preview-heading h2 {
-  font-size: 1.125rem;
+  font-size: var(--type-lg);
   overflow-wrap: anywhere;
 }
 .document-controls,
@@ -37,7 +37,7 @@
   min-width: 44px;
 }
 .document-page-position {
-  font-size: 0.85rem;
+  font-size: var(--type-base);
   font-variant-numeric: tabular-nums;
 }
 .document-viewport {
@@ -62,7 +62,7 @@
   max-width: none;
   margin-inline: auto;
   background: white;
-  box-shadow: 0 2px 5px #16161626;
+  box-shadow: var(--elevation-sm);
 }
 .document-viewport canvas[hidden] {
   display: none;

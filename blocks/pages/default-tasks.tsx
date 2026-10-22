@@ -2,6 +2,7 @@ import {
   useAttachmentRemoval,
   useAttachmentUpload,
   useRecordTask,
+  useRequestWrite,
   withReference,
 } from "@registrystack/app-runtime/react";
 import type { ChangeRequestTask } from "@/blocks/pages/change-request-form-page";
@@ -33,9 +34,13 @@ export function useChangeTask(): ChangeRequestTask {
   return withReference(useRecordTask());
 }
 
-/** The decision task on a request's own page, over the same record task. */
+/**
+ * The decision task on a request's own page, aimed at the request the route names: an
+ * apply is a command on that request, and any other decision is a record task.
+ */
 export function useRequestTask(): RequestDecisionTask {
-  return withReference(useRecordTask());
+  const entity = useRoutedRequestId();
+  return withReference(useRequestWrite(entity, useCurrentRequestId()));
 }
 
 /**

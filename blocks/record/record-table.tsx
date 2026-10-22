@@ -2,7 +2,9 @@ import { ArrowUpRight } from "lucide-react";
 import type { FieldModel, RecordView } from "@registrystack/app-runtime";
 import { FieldValue } from "@/blocks/fields/field-value";
 import { ReferenceHrefProvider } from "@/blocks/fields/reference-value";
-import { useBlockContent } from "@/blocks/lib/content";
+import { InPhrase } from "@/blocks/fields/values";
+import { useBlockContent, useLocale } from "@/blocks/lib/content";
+import { fill } from "@/blocks/lib/format";
 
 /**
  * A record list as a table: one row per record, one column per field the
@@ -19,7 +21,7 @@ export function RecordTable({
   recordHref,
   viewLabel,
 }: {
-  /** Names the table for assistive technology; visually hidden. */
+  /** Names the table and the region it scrolls in for assistive technology; visually hidden. */
   caption: string;
   columns: readonly FieldModel[];
   /** The column whose cell links to the record; no column links without it. */
@@ -30,8 +32,9 @@ export function RecordTable({
   viewLabel: (record: RecordView) => string;
 }) {
   const c = useBlockContent();
+  const locale = useLocale();
   return (
-    <div className="table-wrap">
+    <div className="table-wrap" tabIndex={0} role="region" aria-label={caption}>
       <table>
         <caption className="sr-only">{caption}</caption>
         <thead>
@@ -55,10 +58,12 @@ export function RecordTable({
                       <a className="record-link" href={href}>
                         {/* The cell is already a link; a reference inside it must not nest another. */}
                         <ReferenceHrefProvider href={() => null}>
-                          <FieldValue
-                            field={field}
-                            value={record.values[field.id]}
-                          />
+                          <InPhrase>
+                            <FieldValue
+                              field={field}
+                              value={record.values[field.id]}
+                            />
+                          </InPhrase>
                         </ReferenceHrefProvider>
                       </a>
                     ) : (
@@ -71,7 +76,11 @@ export function RecordTable({
                 ))}
                 <td>
                   <a
-                    aria-label={`${c.viewRecord}: ${viewLabel(record)}`}
+                    aria-label={fill(
+                      c.labelled,
+                      { label: c.viewRecord, value: viewLabel(record) },
+                      locale,
+                    )}
                     className="icon-link"
                     href={href}
                   >

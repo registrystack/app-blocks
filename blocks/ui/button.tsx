@@ -8,7 +8,7 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "border border-primary bg-primary text-primary-foreground hover:bg-(--primary-dark) hover:shadow-[2px_2px_0_var(--border)] active:shadow-none",
+          "border border-primary bg-primary text-primary-foreground hover:bg-(--primary-dark) hover:shadow-sm active:shadow-none",
         outline:
           "border border-input bg-background hover:border-primary hover:bg-accent",
         secondary:

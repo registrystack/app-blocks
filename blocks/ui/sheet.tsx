@@ -1,5 +1,9 @@
 import * as React from "react";
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
+import {
+  useDirection,
+  type TextDirection,
+} from "@base-ui/react/direction-provider";
 import { cn } from "cn";
 
 import { Button } from "@/components/ui/button";
@@ -40,6 +44,22 @@ type SheetContentProps = SheetPrimitive.Popup.Props &
     | { showCloseButton?: true; closeLabel: string }
   );
 
+type PhysicalSide = "top" | "right" | "bottom" | "left";
+
+/**
+ * The side a sheet opens from. A line's start or end is the left or right as
+ * the page reads, so a sheet at `inline-start` opens from the right of a page
+ * read right to left.
+ */
+function sheetSide(
+  side: PhysicalSide | "inline-start" | "inline-end",
+  direction: TextDirection,
+): PhysicalSide {
+  if (side === "inline-start") return direction === "rtl" ? "right" : "left";
+  if (side === "inline-end") return direction === "rtl" ? "left" : "right";
+  return side;
+}
+
 function SheetContent({
   className,
   children,
@@ -48,14 +68,15 @@ function SheetContent({
   closeLabel,
   ...props
 }: SheetContentProps & {
-  side?: "top" | "right" | "bottom" | "left";
+  side?: PhysicalSide | "inline-start" | "inline-end";
 }) {
+  const direction = useDirection();
   return (
     <SheetPortal>
       <SheetOverlay />
       <SheetPrimitive.Popup
         data-slot="sheet-content"
-        data-side={side}
+        data-side={sheetSide(side, direction)}
         className={cn(
           "fixed z-50 flex flex-col gap-4 bg-popover bg-clip-padding text-sm text-popover-foreground shadow-lg transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0 data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=bottom]:data-ending-style:translate-y-[2.5rem] data-[side=bottom]:data-starting-style:translate-y-[2.5rem] data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=left]:data-ending-style:translate-x-[-2.5rem] data-[side=left]:data-starting-style:translate-x-[-2.5rem] data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=right]:data-ending-style:translate-x-[2.5rem] data-[side=right]:data-starting-style:translate-x-[2.5rem] data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=top]:data-ending-style:translate-y-[-2.5rem] data-[side=top]:data-starting-style:translate-y-[-2.5rem] data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm",
           className,
@@ -69,7 +90,7 @@ function SheetContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-3 right-3"
+                className="absolute top-3 end-3"
                 size="icon-sm"
               />
             }
@@ -135,4 +156,5 @@ export {
   SheetFooter,
   SheetTitle,
   SheetDescription,
+  sheetSide,
 };

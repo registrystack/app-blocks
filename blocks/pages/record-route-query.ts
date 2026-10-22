@@ -2,9 +2,10 @@ import type { JsonValue } from "@registrystack/app-runtime";
 
 /**
  * What a record page carries in its hash route's query: a list's filters and
- * search, the answers a form opens with, and the path to return to once a
- * write is confirmed. The route is the only source of truth for all of them,
- * so a link to a filtered list or a preset form is a plain `href`.
+ * search, the answers a form opens with, the path to return to once a write
+ * is confirmed, and the page a form was opened from. The route is the only
+ * source of truth for all of them, so a link to a filtered list or a preset
+ * form is a plain `href`.
  */
 
 const FILTER = "f.";
@@ -12,6 +13,7 @@ const EMPTY = "empty.";
 const SEARCH = "q";
 const PRESET = "preset.";
 const RETURN = "return";
+const BACK = "back";
 
 /** A list narrowed by field and by search; a null filter matches a record where the field is empty. */
 export interface ListQuery {
@@ -57,20 +59,34 @@ export function presetOf(query: URLSearchParams): Record<string, JsonValue> {
  * with a single `/` is one: anything else could leave the app.
  */
 export function returnPathOf(query: URLSearchParams): string | null {
-  const path = query.get(RETURN);
+  return inAppPath(query.get(RETURN));
+}
+
+/**
+ * The in-app page a route says the form was opened from, or null. Its back
+ * link and cancel lead there, but a confirmed write still opens the record
+ * it wrote.
+ */
+export function backPathOf(query: URLSearchParams): string | null {
+  return inAppPath(query.get(BACK));
+}
+
+function inAppPath(path: string | null): string | null {
   return path && /^\/(?![/\\])/.test(path) ? path : null;
 }
 
-/** `path` with a preset and a return path in its query. */
+/** `path` with a preset, a return path and the page it is opened from in its query. */
 export function formRoute(
   path: string,
   preset: Readonly<Record<string, string>>,
   returnPath: string | undefined,
+  from?: string,
 ): string {
   const query = new URLSearchParams();
   for (const [field, value] of Object.entries(preset))
     query.set(`${PRESET}${field}`, value);
   if (returnPath) query.set(RETURN, returnPath);
+  if (from) query.set(BACK, from);
   const text = query.toString();
   return text ? `${path}?${text}` : path;
 }

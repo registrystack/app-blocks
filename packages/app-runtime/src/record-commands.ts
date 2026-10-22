@@ -4,7 +4,11 @@
  */
 import type { QueryKey } from "@tanstack/react-query";
 import type { CommandSpec } from "./command-hooks.js";
-import type { CommandTarget } from "./commands.js";
+import type {
+  CommandMarker,
+  CommandTarget,
+  ProbeVerdict,
+} from "./commands.js";
 import type {
   FieldModel,
   JsonValue,
@@ -23,6 +27,50 @@ export const recordTaskCommand: CommandSpec<RecordTask, RecordTaskResult> = {
       : task.expectedRevision,
   send: (host, task, attemptId) => host.submit({ attemptId, task }),
   retry: (host, attemptId) => host.retry<RecordTaskResult>(attemptId),
+};
+
+/**
+ * How a read of the request settles an unconfirmed apply. A request found applied
+ * confirms that the request is applied, not that this attempt applied it: the browser is
+ * served no digest of the effect applied, so it cannot tell this attempt's effect from
+ * another's, and another actor may have applied the request first. The outcome therefore
+ * states only what is known, and the page words it as "the request has been applied",
+ * with the actor reference BReg reports, never as "your change was applied". One still
+ * at the revision the attempt named was not applied by it; one that moved on without
+ * being applied cannot be told.
+ */
+export function applyVerdict(
+  marker: Pick<CommandMarker, "expectedRevision" | "attemptId" | "target">,
+  read: Pick<RecordView, "revision" | "request">,
+): ProbeVerdict<RecordTaskResult> {
+  if (read.request?.state === "applied")
+    return {
+      settled: "confirmed",
+      value: {
+        outcome: "confirmed",
+        resource: { entity: marker.target.entity, id: marker.target.id },
+        receipt: marker.attemptId,
+      },
+    };
+  if (read.revision === marker.expectedRevision)
+    return { settled: "not-applied" };
+  return { settled: "unknown" };
+}
+
+/**
+ * An apply of one request as a command on that request, so an apply left unresolved is
+ * restored after a reload and locks the request until it settles. The host resends it
+ * under its original attempt while it still holds that attempt, recovering it against a
+ * fresh read of the request; once it does not, reading the request back settles it.
+ */
+export const applyRequestCommand: CommandSpec<RecordTask, RecordTaskResult> = {
+  ...recordTaskCommand,
+  operation: () => "apply",
+  probe: async (host, marker) =>
+    applyVerdict(
+      marker,
+      await host.record(marker.target.entity, marker.target.id),
+    ),
 };
 
 /** What a page supplies to an offered action; the action names the rest. */
@@ -109,24 +157,6 @@ export function recordKeys(
   return keys;
 }
 
-/**
- * The query keys a confirmed action refreshes. A governed action may change the records of
- * any entity, so it refreshes every record list, record and history of the session.
- */
-export function actionKeys(
-  scope: string,
-  action: RecordActionReference,
-  target?: CommandTarget,
-): QueryKey[] {
-  return action.name === "invoke"
-    ? [
-        [scope, "records"],
-        [scope, "record"],
-        [scope, "record-history"],
-      ]
-    : recordKeys(scope, action.entity, target);
-}
-
 /** A form's starting values: the fields the action writes, taken from `initial`. */
 export function formValues(
   fields: readonly FieldModel[],
@@ -138,17 +168,4 @@ export function formValues(
     if (value !== undefined) values[field.id] = value;
   }
   return values;
-}
-
-/** The apply a request view offers, at the revision the view was read. */
-export function applyTask(view: RecordView): RecordTask {
-  const apply = view.actions.find(
-    (action) => action.name === "lifecycle" && action.action === "apply",
-  );
-  if (!apply) throw new Error("Cannot apply: the request offers no apply.");
-  return recordTask(
-    apply,
-    { entity: view.entity, id: view.id },
-    { expectedRevision: view.revision },
-  );
 }

@@ -1,4 +1,4 @@
-import type { ChangeEvent, ReactNode } from "react";
+import type { ChangeEvent, ComponentProps, ReactNode } from "react";
 import { Input, Textarea } from "@/components/ui/input";
 import { useBlockContent, type BlockContent } from "@/blocks/lib/content";
 
@@ -36,6 +36,7 @@ export function FieldError({ name, error }: { name: string; error: string }) {
 export function FieldFrame({
   name,
   label,
+  labelId,
   hint,
   error,
   required,
@@ -43,6 +44,8 @@ export function FieldFrame({
 }: {
   name: string;
   label: string;
+  /** An id for the label, for controls that name themselves by it beside their own label. */
+  labelId?: string;
   hint?: ReactNode;
   error?: string;
   required: boolean;
@@ -51,7 +54,7 @@ export function FieldFrame({
   const c = useBlockContent();
   return (
     <div className={`field ${error ? "field-error" : ""}`}>
-      <label htmlFor={name}>
+      <label htmlFor={name} id={labelId}>
         {label}
         {!required && <span className="optional"> ({c.optional})</span>}
       </label>
@@ -166,7 +169,6 @@ export function YesNoField({
   required: boolean;
   note?: ReactNode;
 }) {
-  const c = useBlockContent();
   return (
     <FieldFrame
       name={name}
@@ -175,25 +177,45 @@ export function YesNoField({
       error={error}
       required={required}
     >
-      <select
+      <YesNoSelect
         id={name}
-        value={value === undefined ? "" : String(value)}
+        value={value}
+        onChange={onChange}
         aria-invalid={!!error}
         aria-describedby={describedBy(name, hint, error)}
-        onChange={(event) =>
-          onChange(
-            event.target.value === ""
-              ? undefined
-              : event.target.value === "true",
-          )
-        }
-      >
-        <option value="">{c.notSupplied}</option>
-        <option value="true">{c.yes}</option>
-        <option value="false">{c.no}</option>
-      </select>
+      />
       {note}
     </FieldFrame>
+  );
+}
+
+/**
+ * The yes or no select itself, whose empty choice leaves the answer unset; a
+ * page that lays out its own label uses it in place of `YesNoField`.
+ */
+export function YesNoSelect({
+  value,
+  onChange,
+  ...props
+}: Omit<ComponentProps<"select">, "value" | "onChange" | "children"> & {
+  value: boolean | undefined;
+  onChange: (value: boolean | undefined) => void;
+}) {
+  const c = useBlockContent();
+  return (
+    <select
+      {...props}
+      value={value === undefined ? "" : String(value)}
+      onChange={(event) =>
+        onChange(
+          event.target.value === "" ? undefined : event.target.value === "true",
+        )
+      }
+    >
+      <option value="">{c.notSupplied}</option>
+      <option value="true">{c.yes}</option>
+      <option value="false">{c.no}</option>
+    </select>
   );
 }
 

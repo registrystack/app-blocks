@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { useContentArea } from "@/blocks/lib/content";
 
 /**
  * The words the shell blocks show on their own: generic defaults an app
@@ -12,10 +12,7 @@ export interface ShellContent {
   loading: string;
   /** Shown on a status badge whose code has no label. */
   unknownStatus: string;
-  /**
-   * Words for a casework state, by its code; an apply item's state is looked
-   * up as `apply:<state>` first (`workItemStateKeys`).
-   */
+  /** Words for a casework state, by its code. */
   stateLabels: Readonly<Record<string, string>>;
   /** Words for a recorded, post-decision status, by its code. */
   recordedStatuses: Readonly<Record<string, string>>;
@@ -31,8 +28,17 @@ export interface ShellContent {
   unavailableBody: string;
   staleTitle: string;
   staleBody: string;
+  /** A write the registry refused because the action is not allowed for the record as it is now. */
+  actionUnavailableTitle: string;
+  actionUnavailableBody: string;
   conflictTitle: string;
   conflictBody: string;
+  /** A record write the registry refused because its values clash with a record or rule in place. */
+  valuesConflictTitle: string;
+  valuesConflictBody: string;
+  /** Submitted values the registry could not accept as they stand. */
+  invalidTitle: string;
+  invalidBody: string;
   refusedTitle: string;
   refusedBody: string;
   /** Heads a write the registry refused in its own words, which follow as the body. */
@@ -46,6 +52,10 @@ export interface ShellContent {
   capacityTitle: string;
   capacityBody: string;
   receipt: string;
+  /** "{label}: {value}": the support reference line, `{label}` being `receipt` and `{value}` the reference. */
+  receiptLine: string;
+  /** Says what the support reference under a problem is for. */
+  receiptHelp: string;
   retry: string;
 
   // The signed-in chrome: the skip link, the header, the sidebar landmark.
@@ -63,6 +73,9 @@ export interface ShellContent {
   staffEntryLink: string;
   serviceEntryLink: string;
   signOut: string;
+  switchAccount: string;
+  /** Names the choice of the language the app is read in; each language is named in itself. */
+  language: string;
   /** A link back to an enclosing page, worded generically for any register. */
   back: string;
 
@@ -82,6 +95,7 @@ export interface ShellContent {
   helpRecovery: string;
   loginFailureTitle: string;
   loginUnmapped: string;
+  loginExpired: string;
   loginAccess: string;
   loginUnavailable: string;
   recoveryTitle: string;
@@ -91,21 +105,10 @@ export interface ShellContent {
 export const shellContent: ShellContent = {
   loading: "Loading…",
   unknownStatus: "Status not available",
-  // A Casework work item's states, then an apply item's where they differ,
-  // then its due states: the same words as `caseworkContent.stateLabels`,
-  // which words them everywhere else. `cancelled` is left to the model, as a
-  // request state; the item page header takes the Casework word for it.
+  // A Casework review task's open state, then its due states: the same words
+  // as `caseworkContent.stateLabels`, which words them everywhere else.
   stateLabels: {
     open: "Waiting for review",
-    claimed: "In review",
-    synchronizing: "Updating",
-    "waiting-applicant": "Waiting for applicant",
-    "waiting-application": "Waiting to apply",
-    completed: "Completed",
-    superseded: "Superseded",
-    "apply:open": "Ready to apply",
-    "apply:claimed": "Ready to apply",
-    "apply:waiting-application": "Not ready to apply",
     "on-track": "On track",
     "at-risk": "Due soon",
     overdue: "Overdue",
@@ -124,8 +127,16 @@ export const shellContent: ShellContent = {
     "It may have been removed, or you may not have access to it.",
   staleTitle: "This changed before the action completed",
   staleBody: "Reload the page to see what changed, then try again.",
+  actionUnavailableTitle: "This action is not available for this record now",
+  actionUnavailableBody: "Reload the page to see the current state of the record.",
   conflictTitle: "This conflicts with the current record",
   conflictBody: "This action is no longer available. The request has moved on.",
+  valuesConflictTitle: "The registry did not accept these values",
+  valuesConflictBody:
+    "They clash with a record or rule already in place. Check the values and try again.",
+  invalidTitle: "Check your answers",
+  invalidBody:
+    "The registry could not accept these values. Check them and try again.",
   refusedTitle: "This action is not available here",
   refusedBody: "Reload the page to see its current state.",
   registryRefusedTitle: "The registry did not accept this",
@@ -138,6 +149,9 @@ export const shellContent: ShellContent = {
   capacityTitle: "The service is busy",
   capacityBody: "Try again shortly.",
   receipt: "Support reference",
+  receiptLine: "{label}: {value}",
+  receiptHelp:
+    "Quote this reference if you contact support about this problem.",
   retry: "Try again",
 
   navMain: "Main",
@@ -155,6 +169,8 @@ export const shellContent: ShellContent = {
   staffEntryLink: "Staff service",
   serviceEntryLink: "Public service",
   signOut: "Sign out",
+  switchAccount: "Switch account",
+  language: "Language",
   back: "Back",
 
   introduction: "Welcome",
@@ -173,6 +189,7 @@ export const shellContent: ShellContent = {
     "If a submission's result is unclear, do not repeat it as a new request. Use the retry offered on that request instead.",
   loginFailureTitle: "We could not complete sign-in",
   loginUnmapped: "Your account is not recognized by this service.",
+  loginExpired: "Your sign-in took too long and has expired. Sign in again.",
   loginAccess: "You do not have access to this service.",
   loginUnavailable: "Sign-in is temporarily unavailable.",
   recoveryTitle: "A previous submission needs checking",
@@ -180,22 +197,6 @@ export const shellContent: ShellContent = {
     "You have an earlier submission whose result was not confirmed.",
 };
 
-const ShellContentContext = createContext<ShellContent>(shellContent);
-
-export function ShellContentProvider({
-  content,
-  children,
-}: {
-  content: ShellContent;
-  children: ReactNode;
-}) {
-  return (
-    <ShellContentContext.Provider value={content}>
-      {children}
-    </ShellContentContext.Provider>
-  );
-}
-
 export function useShellContent(): ShellContent {
-  return useContext(ShellContentContext);
+  return useContentArea("shell", shellContent);
 }

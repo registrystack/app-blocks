@@ -8,12 +8,14 @@ import {
   type ReactNode,
 } from "react";
 import type {
+  AuthenticatedSession,
   CaseworkStaffingAbsence,
-  CaseworkStaffingActionReference,
   CaseworkStaffingApplyResult,
+  CaseworkStaffingCaseloadPreview,
   CaseworkPrincipal,
   CaseworkStaffingPrincipal,
-  CaseworkWorkItem,
+  ReviewTask,
+  ReviewTaskDetail,
 } from "@registrystack/app-runtime";
 import type { CommandState } from "@registrystack/app-runtime";
 import {
@@ -21,10 +23,11 @@ import {
   staffingWriteStuck,
   useAbsenceEnd,
   useAbsenceSave,
+  useAuthority,
   useCaseloadMove,
   useCaseloadPreview,
-  useStaffingAssignment,
-  useStaffingAssignments,
+  useRereadOnRefusal,
+  useReviewTaskAssignment,
   useStaffingRecovery,
   useStaffingTargets,
   type CaseloadPreviewInput,
@@ -41,7 +44,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Combobox,
   ComboboxContent,
@@ -50,15 +52,6 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/components/ui/combobox";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -68,9 +61,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { InputField } from "@/blocks/fields/input-field";
+import { FieldFrame, InputField } from "@/blocks/fields/input-field";
+import { useBlockContent, useLocale } from "@/blocks/lib/content";
+import { fill } from "@/blocks/lib/format";
 import { LiveAnnouncer, useAnnouncement } from "@/blocks/casework/announce";
-import { useCaseworkContent, type ReassignResult } from "@/blocks/casework/casework-content";
+import { useCaseworkContent } from "@/blocks/casework/casework-content";
 import {
   CaseworkPerson,
   caseworkDateTime,
@@ -79,20 +74,19 @@ import {
   caseworkLocalZone,
   caseworkPerson,
   caseworkPersonSubject,
-  CaseworkReference,
-  caseworkReference,
   ErrorSummary,
   Loading,
   Notice,
 } from "@/blocks/casework/shared";
 
 /**
- * The staffing surfaces: the assignment form an officer meets on a casework
- * item, and the dialogs the Team page opens to record or end absence cover,
- * move a person's work and reassign selected items. Casework decides who is
- * eligible and what may move; these screens carry presentation and wording
- * only, and every choice is sent back as the opaque reference Casework
- * issued, never as a name.
+ * The staffing surfaces: the caseload move a supervisor previews and confirms
+ * on the Staffing page, the drawer and dialog that record or end absence
+ * cover, and the form that hands one review task on to a colleague. Casework
+ * decides who is eligible and what may move; these screens carry
+ * presentation and wording only. A choice is sent back as the opaque
+ * reference Casework issued, or, for a review task's assignment, as the
+ * issuer and subject Casework named the colleague by; never as a name.
  */
 
 /**
@@ -129,6 +123,42 @@ function TargetStatus({ targets }: { targets: Targets }) {
   return null;
 }
 
+/** What Casework said about a colleague list, and the way to read more of it. */
+function TargetListStatus({
+  targets,
+  announce,
+}: {
+  targets: Targets;
+  announce?: (message: string) => void;
+}) {
+  const c = useCaseworkContent();
+  const locale = useLocale();
+  return (
+    <>
+      <TargetStatus targets={targets} />
+      {targets.hasNextPage && (
+        <div className="actions">
+          <Button
+            variant="outline"
+            disabled={targets.isFetchingNextPage}
+            onClick={async () => {
+              const more = await targets.fetchNextPage();
+              const count =
+                more.data?.pages.reduce(
+                  (total, page) => total + page.items.length,
+                  0,
+                ) ?? 0;
+              announce?.(fill(c.moreTargetsLoaded, { count }, locale));
+            }}
+          >
+            {c.moreTargets}
+          </Button>
+        </div>
+      )}
+    </>
+  );
+}
+
 function TargetCombobox({
   name,
   label,
@@ -139,6 +169,7 @@ function TargetCombobox({
   announce,
   inline = false,
   exclude,
+  listStatus = true,
 }: {
   name: string;
   label: string;
@@ -157,6 +188,11 @@ function TargetCombobox({
   inline?: boolean;
   /** A reference left out of the list, such as the person being covered. */
   exclude?: string;
+  /**
+   * Says under the field what Casework said about its list, with the way to
+   * read more of it. A form whose fields share one list says it once instead.
+   */
+  listStatus?: boolean;
 }) {
   const c = useCaseworkContent();
   const [listOpen, setListOpen] = useState(false);
@@ -232,26 +268,7 @@ function TargetCombobox({
           <ComboboxContent>{list}</ComboboxContent>
         )}
       </Combobox>
-      <TargetStatus targets={targets} />
-      {targets.hasNextPage && (
-        <div className="actions">
-          <Button
-            variant="outline"
-            disabled={targets.isFetchingNextPage}
-            onClick={async () => {
-              const more = await targets.fetchNextPage();
-              const count =
-                more.data?.pages.reduce(
-                  (total, page) => total + page.items.length,
-                  0,
-                ) ?? 0;
-              announce?.(c.moreTargetsLoaded(count));
-            }}
-          >
-            {c.moreTargets}
-          </Button>
-        </div>
-      )}
+      {listStatus && <TargetListStatus targets={targets} announce={announce} />}
     </div>
   );
 }
@@ -279,24 +296,21 @@ function useOutcomeFocus<T extends HTMLElement>(shown: boolean) {
 }
 
 /**
- * A staffing write Casework could not confirm, on a screen with no work item
- * to recover against. The same attempt is offered again; a second attempt is
- * never created from this notice. An attempt the host can no longer resend is
- * left for the officer to check, and can be put away.
+ * A staffing write Casework could not confirm. The same attempt is offered
+ * again; a second attempt is never created from this notice. An attempt the
+ * host can no longer resend is left for the officer to check, and can be put
+ * away.
  */
 function UnknownWrite({
   message,
   state,
   retry,
   dismiss,
-  busy = false,
 }: {
   message: string;
   state: CommandState<unknown>;
   retry: () => void;
   dismiss: () => void;
-  /** True while a batch this write belongs to is resending another entry. */
-  busy?: boolean;
 }) {
   const c = useCaseworkContent();
   if (staffingWriteStuck(state))
@@ -313,7 +327,7 @@ function UnknownWrite({
       <p>{message}</p>
       <Button
         variant="outline"
-        disabled={busy || state.state === "recovering"}
+        disabled={state.state === "recovering"}
         onClick={retry}
       >
         {c.exactRetry}
@@ -328,6 +342,7 @@ function UnknownWrite({
  */
 export function StaffingPendingNotice({ route }: { route: string }) {
   const c = useCaseworkContent();
+  const locale = useLocale();
   const recovery = useStaffingRecovery();
   const { clearOutcome } = recovery;
   const live = recovery.pending.filter(
@@ -351,7 +366,7 @@ export function StaffingPendingNotice({ route }: { route: string }) {
   return (
     <div className="staffing-pending">
       <Notice tone="warning" title={c.pendingTitle}>
-        {live > 0 && <p>{c.pendingBody(live)}</p>}
+        {live > 0 && <p>{fill(c.pendingBody, { count: live }, locale)}</p>}
         {recovery.outcome === "refused" && <p>{c.pendingRefused}</p>}
         {recovery.outcome === "unknown" && (
           <p>{stuck ? c.unknownStuck : c.pendingStill}</p>
@@ -377,121 +392,179 @@ export function StaffingPendingNotice({ route }: { route: string }) {
   );
 }
 
-export function CaseworkAssignmentForm({
-  item,
-  actions,
-  active = true,
+/** The ways one review task is handed on to a colleague. */
+export type ReviewAssignmentOperation = "assign" | "delegate";
+
+/**
+ * The ways of handing a review task on to offer an officer: a supervisor
+ * assigns it, the officer holding it delegates it, and a decided task goes
+ * nowhere. An offer grants nothing; Casework checks every assignment again.
+ */
+export function reviewAssignmentOperations(
+  task: Pick<ReviewTask, "status" | "heldByYou">,
+  profile: AuthenticatedSession["caseworkProfile"],
+): ReviewAssignmentOperation[] {
+  if (task.status === "decided") return [];
+  const operations: ReviewAssignmentOperation[] = [];
+  if (profile === "supervisor") operations.push("assign");
+  if (task.heldByYou) operations.push("delegate");
+  return operations;
+}
+
+/**
+ * The colleague chosen from a list, named as Casework names a person: by
+ * issuer and subject. The reference the list keys them by is bound to this
+ * session's read of the list, and is never sent.
+ */
+export function assignmentPrincipal(
+  targets: readonly CaseworkStaffingPrincipal[],
+  ref: string,
+): { issuer: string; subject: string } | undefined {
+  const target = ref ? targets.find((item) => item.ref === ref) : undefined;
+  return target
+    ? { issuer: target.principal.issuer, subject: target.principal.subject }
+    : undefined;
+}
+
+/**
+ * Hands one review task on to a colleague: a supervisor assigns it, the
+ * officer holding it delegates it. The colleagues are read when the officer
+ * opens the form. An attempt that has not settled keeps the form open and in
+ * view, even once the task as read again offers nothing more to do.
+ */
+export function ReviewAssignmentForm({
+  task,
+  reread,
+  rereading,
   renderError,
 }: {
-  item: CaseworkWorkItem;
-  actions: CaseworkStaffingActionReference[];
-  /**
-   * Whether the officer can see this form. A page that keeps the form mounted
-   * behind a closed panel passes false, so the team roster is read when the
-   * officer asks for it rather than on every page load.
-   */
-  active?: boolean;
+  task: ReviewTaskDetail;
+  /** Reads the task again, after a refusal that says it moved on. */
+  reread: () => void;
+  /** Whether the task is being read again; nothing is sent until it is. */
+  rereading: boolean;
   renderError: RenderError;
 }) {
   const c = useCaseworkContent();
+  const operations = reviewAssignmentOperations(
+    task,
+    useAuthority().caseworkProfile,
+  );
+  // An unresolved assignment of this task is restored wherever it is shown.
+  const command = useReviewTaskAssignment(task.taskId);
+  const state = command.state;
+  useRereadOnRefusal(state, reread);
+  const [opened, setOpened] = useState(false);
+  const open =
+    opened || (state.state !== "idle" && state.state !== "confirmed");
+  const formShown = open && operations.length > 0;
   const targets = useStaffingTargets(
-    active ? { purpose: "assignment", queue: item.queue, limit: "100" } : null,
+    formShown
+      ? { purpose: "assignment", queue: task.queue, limit: "100" }
+      : null,
   );
   const [announcement, announce] = useAnnouncement();
-  // The chosen action is kept by name: every read of the item withdraws its
-  // references and mints new ones, so a reference held here would go stale.
-  const [actionName, setActionName] = useState(actions[0]?.name);
-  const chosenAction =
-    actions.find((action) => action.name === actionName) ?? actions[0];
-  const actionRef = chosenAction?.ref ?? "";
+  const [chosen, setChosen] = useState<ReviewAssignmentOperation>();
+  const operation =
+    chosen && operations.includes(chosen) ? chosen : operations[0];
   const [targetRef, setTargetRef] = useState("");
   const [reason, setReason] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
-  // An unresolved assignment of this item, made here or by a reassignment,
-  // is restored wherever the item's form is shown.
-  const command = useStaffingAssignment(item.id);
-  const confirmed = command.state.state === "confirmed";
+  const confirmed = state.state === "confirmed";
   const assignmentOutcome = useOutcomeFocus<HTMLDivElement>(confirmed);
 
-  if (actions.length === 0) return null;
+  if (!operations.length && state.state === "idle") return null;
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (command.locked) return;
+    if (command.locked || rereading) return;
+    const to = assignmentPrincipal(targets.items, targetRef);
     const next: Record<string, string> = {};
-    if (!actionRef) next["staffing-action"] = c.requiredError;
-    if (!targetRef) next["staffing-target"] = c.requiredError;
+    if (!operation) next["staffing-action"] = c.requiredError;
+    if (!to) next["staffing-target"] = c.requiredError;
     setErrors(next);
-    if (Object.keys(next).length) return;
-    void command.run({
-      actionRef,
-      targetRef,
-      ...(reason.trim() ? { reason: reason.trim() } : {}),
-    });
+    if (!operation || !to) return;
+    void command.assign(task, operation, to, reason.trim() || undefined);
   }
 
   return (
     <section className="staffing-assignment">
-      <h2>{c.assignmentHeading}</h2>
-      <p>{c.assignmentDescription}</p>
-      <LiveAnnouncer message={announcement} />
-      {targets.isPending ? (
-        <Loading />
-      ) : targets.error ? (
-        renderError(targets.error, () => void targets.refetch())
-      ) : (
-        <form onSubmit={submit}>
-          <ErrorSummary errors={errors} />
-          {/* While the outcome is unknown nothing here can start a second
-              attempt. */}
-          <fieldset disabled={command.locked} className="min-w-0">
-            <InputField
-              name="staffing-action"
-              label={c.assignmentAction}
-              value={actionRef}
-              onChange={(ref) => {
-                const next = actions.find((action) => action.ref === ref);
-                if (next) setActionName(next.name);
-              }}
-              error={errors["staffing-action"]}
-              options={actions.map((action) => ({
-                value: action.ref,
-                label: c.actionLabels[action.name],
-              }))}
-            />
-            <TargetCombobox
-              name="staffing-target"
-              label={c.assignmentTarget}
-              value={targetRef}
-              onChange={setTargetRef}
-              error={errors["staffing-target"]}
-              targets={targets}
-              announce={announce}
-            />
-            <InputField
-              name="staffing-reason"
-              label={c.assignmentReason}
-              value={reason}
-              onChange={setReason}
-              hint={c.assignmentReasonHint}
-              required={false}
-              multiline
-            />
-          </fieldset>
-          {!command.locked && (
-            <Button type="submit">
-              {
-                c.actionLabels[(chosenAction ?? actions[0]!).name]
-              }
-            </Button>
-          )}
-        </form>
+      {operations.length > 0 && (
+        <Button
+          variant="outline"
+          aria-expanded={open}
+          // While the outcome is unknown nothing here can hide it.
+          disabled={command.locked}
+          onClick={() => {
+            if (!open) return setOpened(true);
+            setOpened(false);
+            command.dismiss();
+          }}
+        >
+          {c.assignmentHeading}
+        </Button>
       )}
-      {command.state.state === "refused" && renderError(command.state.error)}
-      {commandUnresolved(command.state) && (
+      {formShown && (
+        <>
+          <p>{c.assignmentDescription}</p>
+          <LiveAnnouncer message={announcement} />
+          {targets.isPending ? (
+            <Loading />
+          ) : targets.error ? (
+            renderError(targets.error, () => void targets.refetch())
+          ) : (
+            <form onSubmit={submit}>
+              <ErrorSummary errors={errors} />
+              {/* While the outcome is unknown nothing here can start a second
+                  attempt. */}
+              <fieldset disabled={command.locked} className="min-w-0">
+                <InputField
+                  name="staffing-action"
+                  label={c.assignmentAction}
+                  value={operation ?? ""}
+                  onChange={(value) => {
+                    const next = operations.find((name) => name === value);
+                    if (next) setChosen(next);
+                  }}
+                  error={errors["staffing-action"]}
+                  options={operations.map((name) => ({
+                    value: name,
+                    label: c.actionLabels[name],
+                  }))}
+                />
+                <TargetCombobox
+                  name="staffing-target"
+                  label={c.assignmentTarget}
+                  value={targetRef}
+                  onChange={setTargetRef}
+                  error={errors["staffing-target"]}
+                  targets={targets}
+                  announce={announce}
+                />
+                <InputField
+                  name="staffing-reason"
+                  label={c.assignmentReason}
+                  value={reason}
+                  onChange={setReason}
+                  hint={c.assignmentReasonHint}
+                  required={false}
+                  multiline
+                />
+              </fieldset>
+              {!command.locked && operation && (
+                <Button type="submit" disabled={rereading}>
+                  {c.actionLabels[operation]}
+                </Button>
+              )}
+            </form>
+          )}
+        </>
+      )}
+      {state.state === "refused" && renderError(state.error)}
+      {commandUnresolved(state) && (
         <UnknownWrite
           message={c.assignmentUnknown}
-          state={command.state}
+          state={state}
           retry={() => void command.retry()}
           dismiss={command.dismissUnknown}
         />
@@ -516,7 +589,7 @@ export function isSamePerson(
 /** Where focus goes when a dialog closes: the control that opened it, else the page title. */
 type FinalFocus = () => HTMLElement | null;
 
-/** One way to move a person's held work, offered once their cover is saved. */
+/** One way to move the review tasks a person holds, offered once their cover is saved. */
 export interface MoveOffer {
   key: string;
   queueLabel: string;
@@ -559,7 +632,7 @@ export function AbsenceDrawer({
       }}
     >
       <SheetContent
-        side="right"
+        side="inline-end"
         showCloseButton={false}
         finalFocus={finalFocus}
         className="overflow-y-auto"
@@ -604,6 +677,7 @@ export function AbsenceForm({
   renderError: RenderError;
 }) {
   const c = useCaseworkContent();
+  const locale = useLocale();
   const [announcement, announce] = useAnnouncement();
   const fixed = absence?.person ?? person;
   const people = useStaffingTargets(
@@ -670,7 +744,7 @@ export function AbsenceForm({
           {principal &&
             moveOffers(principal).map((offer) => (
               <Button key={offer.key} variant="outline" onClick={offer.open}>
-                {`${c.caseloadTitle(name!, offer.queueLabel)}…`}
+                {`${fill(c.caseloadTitle, { person: name!, queue: offer.queueLabel }, locale)}…`}
               </Button>
             ))}
         </div>
@@ -753,9 +827,9 @@ export function AbsenceForm({
             error={errors["absence-until"]}
           />
           <p className="mb-3 text-xs text-muted-foreground">
-            {c.zoneHint(zone)}
+            {fill(c.zoneHint, { zone }, locale)}
           </p>
-          {name && <p className="mb-3 text-sm">{c.heldWork(name)}</p>}
+          {name && <p className="mb-3 text-sm">{fill(c.heldWork, { person: name }, locale)}</p>}
         </fieldset>
         {command.state.state === "refused" && renderError(command.state.error)}
         {commandUnresolved(command.state) && (
@@ -910,6 +984,7 @@ export function EndAbsenceBody({
   renderError: RenderError;
 }) {
   const c = useCaseworkContent();
+  const locale = useLocale();
 
   async function settle(answer: Promise<CommandState<unknown>>) {
     if ((await answer).state === "confirmed") onEnded();
@@ -922,10 +997,14 @@ export function EndAbsenceBody({
           {c.confirmEndAbsenceTitle}
         </AlertDialogTitle>
         <AlertDialogDescription className="mb-0">
-          {c.confirmEndAbsenceBody(
-            caseworkPerson(absence.person.principal),
-            caseworkDateTime(absence.from),
-            caseworkDateTime(absence.until),
+          {fill(
+            c.confirmEndAbsenceBody,
+            {
+              person: caseworkPerson(absence.person.principal),
+              from: caseworkDateTime(absence.from, locale),
+              until: caseworkDateTime(absence.until, locale),
+            },
+            locale,
           )}
         </AlertDialogDescription>
       </AlertDialogHeader>
@@ -957,645 +1036,341 @@ export function EndAbsenceBody({
   );
 }
 
-/** The person whose work moves, as the Team row names them. */
-export interface MoveWorkFrom {
-  principal: CaseworkPrincipal;
-  name: string;
+/** A queue a caseload can move in, as Casework named it. */
+export interface CaseloadQueue {
   queue: string;
   queueLabel: string;
-  /** What Casework counted them holding in this queue. */
-  activeItems: number;
 }
 
 /**
- * Moving everything one person holds in one queue to a colleague: Casework
- * previews what may move page by page, the officer ticks the exact items,
- * and Casework answers for each item it processed.
+ * What the officer has chosen for one caseload move. The page holds it, so an
+ * absence cover's move offer can start the form with the queue and the
+ * person away; that person is matched to the reference Casework issues for
+ * the queue, and nothing can be previewed until a reference is chosen.
  */
-export function MoveWorkDialog({
-  open,
-  onOpenChange,
-  from,
-  finalFocus,
-  renderError,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  from: MoveWorkFrom;
-  finalFocus: FinalFocus;
-  renderError: RenderError;
-}) {
-  const c = useCaseworkContent();
-  const [unresolved, setUnresolved] = useState(false);
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (next || !unresolved) onOpenChange(next);
-      }}
-    >
-      <DialogContent
-        showCloseButton={false}
-        finalFocus={finalFocus}
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"
-      >
-        <DialogHeader>
-          <DialogTitle className="mb-0">
-            {c.caseloadTitle(from.name, from.queueLabel)}
-          </DialogTitle>
-          <DialogDescription className="mb-0">
-            {c.caseloadDescription}
-          </DialogDescription>
-        </DialogHeader>
-        <MoveWorkBody
-          from={from}
-          onUnresolvedChange={setUnresolved}
-          renderError={renderError}
-        />
-      </DialogContent>
-    </Dialog>
+export interface CaseloadDraft {
+  queue: string;
+  fromRef: string;
+  toRef: string;
+  reason: string;
+  /** The person away, when an absence cover's move offer started the form. */
+  fromPrincipal?: CaseworkPrincipal;
+}
+
+export const emptyCaseloadDraft: CaseloadDraft = {
+  queue: "",
+  fromRef: "",
+  toRef: "",
+  reason: "",
+};
+
+/**
+ * What a preview asks Casework for, or which fields stop it being asked. The
+ * movement is named by Casework's own references and the reason alone, so a
+ * name on screen never decides who is moved.
+ */
+export function caseloadPreviewRequest(
+  value: Pick<CaseloadDraft, "queue" | "fromRef" | "toRef" | "reason">,
+  required: string,
+): { input?: CaseloadPreviewInput; errors: Record<string, string> } {
+  const reason = value.reason.trim();
+  const errors: Record<string, string> = {};
+  if (!value.queue) errors["caseload-queue"] = required;
+  if (!value.fromRef) errors["caseload-from-person"] = required;
+  if (!value.toRef) errors["caseload-to-person"] = required;
+  if (!reason) errors["caseload-reason"] = required;
+  if (Object.keys(errors).length) return { errors };
+  return {
+    input: {
+      queue: value.queue,
+      fromRef: value.fromRef,
+      toRef: value.toRef,
+      reason,
+    },
+    errors,
+  };
+}
+
+/**
+ * Reads a move's answer. A confirmed move spends its preview, and a refused
+ * one cannot be confirmed again, so both drop the preview and the officer
+ * previews afresh; an unknown outcome keeps it while the same attempt is
+ * retried. Answers with Casework's own count only once it confirmed the move.
+ */
+export async function settleCaseload(
+  answer: Promise<CommandState<CaseworkStaffingApplyResult>>,
+  reset: () => void,
+): Promise<number | undefined> {
+  const settled = await answer;
+  if (settled.state === "confirmed" && settled.value.outcome === "confirmed") {
+    reset();
+    return settled.value.moved;
+  }
+  if (settled.state === "refused") reset();
+  return undefined;
+}
+
+/** Confirms a preview by its reference alone: Casework moves exactly the set it fenced. */
+export function applyCaseload(
+  command: {
+    run: (body: {
+      previewRef: string;
+    }) => Promise<CommandState<CaseworkStaffingApplyResult>>;
+  },
+  previewed: Pick<CaseworkStaffingCaseloadPreview, "previewRef">,
+  reset: () => void,
+): Promise<number | undefined> {
+  return settleCaseload(
+    command.run({ previewRef: previewed.previewRef }),
+    reset,
   );
 }
 
-export function MoveWorkBody({
-  from,
-  onUnresolvedChange,
+/**
+ * Moving the review tasks one person holds in one queue to a colleague. The
+ * officer chooses the queue, both people and a reason, and previews: Casework
+ * answers how many review tasks would move and until when the preview holds.
+ * Confirming sends that preview's reference alone, and the count moved is
+ * shown only once Casework confirms it. The form is controlled, so the page
+ * can start it from an absence cover's move offer.
+ */
+export function CaseloadMoveForm({
+  queues,
+  queuesPartial = false,
+  value,
+  onChange,
   renderError,
 }: {
-  from: MoveWorkFrom;
-  onUnresolvedChange: (unresolved: boolean) => void;
+  queues: readonly CaseloadQueue[];
+  /** Casework listed only part of what the queues were read from. */
+  queuesPartial?: boolean;
+  value: CaseloadDraft;
+  onChange: (value: CaseloadDraft) => void;
   renderError: RenderError;
 }) {
   const c = useCaseworkContent();
+  const blockWords = useBlockContent();
+  const locale = useLocale();
   const [announcement, announce] = useAnnouncement();
-  const targets = useStaffingTargets({
-    purpose: "assignment",
-    queue: from.queue,
-    limit: "100",
-  });
-  const fromRef = targets.items.find((target) =>
-    isSamePerson(target.principal, from.principal),
-  )?.ref;
-  // One movement of this person's work in this queue at a time: an unresolved
-  // one is restored when the dialog opens again, even after a reload.
-  const command = useCaseloadMove(
-    fromRef ? `${from.queue}/${fromRef}` : undefined,
-  );
-  const { locked } = command;
-  const result =
-    command.state.state === "confirmed" ? command.state.value : undefined;
-  const [toRef, setToRef] = useState("");
-  const [reason, setReason] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [previewInput, setPreviewInput] = useState<CaseloadPreviewInput>();
-  const caseload = useCaseloadPreview();
-  const { pages, failure } = caseload;
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const previewPending = caseload.pending;
-  const caseloadOutcome = useOutcomeFocus<HTMLElement>(result !== undefined);
-
-  useEffect(() => onUnresolvedChange(locked), [onUnresolvedChange, locked]);
-
-  const selections = useMemo(
-    () => pages.flatMap((page) => page.items),
-    [pages],
+  const targets = useStaffingTargets(
+    value.queue
+      ? { purpose: "assignment", queue: value.queue, limit: "100" }
+      : null,
   );
-  const lastPage = pages.at(-1);
+  const named = value.fromPrincipal;
+  const fromRef =
+    value.fromRef ||
+    (named &&
+      targets.items.find((target) => isSamePerson(target.principal, named))
+        ?.ref) ||
+    "";
+  // One movement per queue and person at a time: an unresolved one is
+  // restored whenever the same move is chosen again, even after a reload.
+  const command = useCaseloadMove(
+    value.queue && fromRef ? `${value.queue}/${fromRef}` : undefined,
+  );
+  const caseload = useCaseloadPreview();
+  const { previewed } = caseload;
+  const settled = command.state;
+  const moved =
+    settled.state === "confirmed" && settled.value.outcome === "confirmed"
+      ? settled.value.moved
+      : undefined;
+  const previewPanel = useOutcomeFocus<HTMLDivElement>(previewed !== null);
+  const movedPanel = useOutcomeFocus<HTMLDivElement>(moved !== undefined);
 
-  function change(setter: (value: string) => void, value: string) {
-    setter(value);
-    setPreviewInput(undefined);
+  function nameOf(ref: string) {
+    const target = targets.items.find((each) => each.ref === ref);
+    return target ? caseworkPerson(target.principal) : c.caseloadUnlisted;
+  }
+
+  // Any change makes the last preview and answer about a different move.
+  function change(next: Partial<CaseloadDraft>) {
+    onChange({ ...value, fromRef, ...next });
     caseload.reset();
-    setSelected(new Set());
     command.dismiss();
   }
 
-  async function preview(cursor?: string) {
-    let input = previewInput;
-    if (!cursor) {
-      const next: Record<string, string> = {};
-      if (!toRef) next["move-to"] = c.requiredError;
-      if (!reason.trim()) next["move-reason"] = c.requiredError;
-      setErrors(next);
-      if (Object.keys(next).length || !fromRef) return;
-      input = {
-        fromRef,
-        toRef,
-        queue: from.queue,
-        reason: reason.trim(),
-        limit: "25",
-      };
-      setPreviewInput(input);
-      caseload.reset();
-      setSelected(new Set());
-      command.dismiss();
-    }
-    if (!input) return;
-    const loaded = await caseload.preview(input, cursor);
-    if (!loaded) return;
-    const page = loaded.at(-1)!;
-    // What Casework offers is ticked as it arrives: the officer unticks
-    // what should stay, and nothing already unticked is ticked again.
-    setSelected((current) => {
-      const next = new Set(current);
-      for (const selection of page.items) next.add(selection.ref);
-      return next;
-    });
-    announce(
-      c.previewCount(
-        loaded.reduce((total, each) => total + each.items.length, 0),
-      ),
-    );
-  }
-
-  async function settle(
-    answer: Promise<CommandState<CaseworkStaffingApplyResult>>,
-  ) {
-    const settled = await answer;
-    if (settled.state !== "confirmed" || settled.value.outcome !== "confirmed")
-      return;
-    // The exact selection Casework processed is spent: it cannot be applied
-    // again, so the ticks and the button that sends them start over.
-    setSelected(new Set());
-    announce(c.caseloadResultsAnnouncement(settled.value.items.length));
-  }
-
-  function applySelected(event: FormEvent) {
+  async function preview(event: FormEvent) {
     event.preventDefault();
-    if (locked) return;
-    const selectionRefs = selections
-      .filter((selection) => selected.has(selection.ref))
-      .map((selection) => selection.ref);
-    if (!selectionRefs.length) {
-      setErrors({ [SELECTION_FIELD]: c.selectSomething });
-      return;
-    }
-    setErrors({});
-    void settle(command.run({ selectionRefs }));
+    if (command.locked || caseload.pending) return;
+    const request = caseloadPreviewRequest(
+      { ...value, fromRef },
+      c.requiredError,
+    );
+    setErrors(request.errors);
+    if (!request.input) return;
+    command.dismiss();
+    await caseload.preview(request.input);
   }
 
-  if (targets.isPending) return <Loading />;
-  if (targets.error)
-    return renderError(targets.error, () => void targets.refetch());
-  if (!fromRef) return <p>{c.caseloadNoMove(from.name)}</p>;
-
-  const ticked = selections.filter((selection) =>
-    selected.has(selection.ref),
-  ).length;
-  // Once Casework has answered its last page, what this person holds beyond
-  // the items offered is counted; while more may follow, nothing is claimed.
-  const settled = lastPage?.status === "complete" && !lastPage.nextCursor;
-  const remainder = from.activeItems - selections.length;
+  const refusal = settled.state === "refused" ? settled : undefined;
   return (
     <>
       <LiveAnnouncer message={announcement} />
       <ErrorSummary errors={errors} />
-      <form
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-          void preview();
-        }}
-      >
-        {/* While a movement's outcome is unknown nothing here can start a
-            second one. */}
-        <fieldset disabled={locked} className="min-w-0">
-          <TargetCombobox
-            inline
-            name="move-to"
-            label={c.moveTo}
-            value={toRef}
-            onChange={(value) => change(setToRef, value)}
-            error={errors["move-to"]}
-            targets={targets}
-            exclude={fromRef}
-            announce={announce}
-          />
+      <form noValidate onSubmit={(event) => void preview(event)}>
+        {/* While a move's outcome is unknown nothing here can start another. */}
+        <fieldset disabled={command.locked} className="min-w-0">
+          <FieldFrame
+            name="caseload-queue"
+            label={c.caseloadQueue}
+            error={errors["caseload-queue"]}
+            required
+          >
+            <select
+              id="caseload-queue"
+              name="caseload-queue"
+              value={value.queue}
+              onChange={(event) =>
+                change({
+                  queue: event.target.value,
+                  fromRef: "",
+                  toRef: "",
+                  fromPrincipal: undefined,
+                })
+              }
+              aria-invalid={!!errors["caseload-queue"]}
+              aria-describedby={
+                errors["caseload-queue"] ? "caseload-queue-error" : undefined
+              }
+              required
+            >
+              <option value="">{blockWords.selectOption}</option>
+              {queues.map((queue) => (
+                <option key={queue.queue} value={queue.queue}>
+                  {queue.queueLabel}
+                </option>
+              ))}
+            </select>
+            {queuesPartial && (
+              <p className="staffing-status">{c.caseloadQueuesPartial}</p>
+            )}
+          </FieldFrame>
+          {value.queue &&
+            (targets.isPending ? (
+              <Loading />
+            ) : targets.error ? (
+              renderError(targets.error, () => void targets.refetch())
+            ) : (
+              <>
+                {named && targets.loaded && !fromRef && (
+                  <p className="staffing-status">
+                    {fill(c.caseloadNoMove, { person: caseworkPerson(named) }, locale)}
+                  </p>
+                )}
+                <TargetCombobox
+                  name="caseload-from-person"
+                  label={c.moveFrom}
+                  value={fromRef}
+                  onChange={(ref) =>
+                    change({
+                      fromRef: ref,
+                      fromPrincipal: undefined,
+                      toRef: ref === value.toRef ? "" : value.toRef,
+                    })
+                  }
+                  error={errors["caseload-from-person"]}
+                  targets={targets}
+                  listStatus={false}
+                />
+                <TargetCombobox
+                  name="caseload-to-person"
+                  label={c.moveTo}
+                  value={value.toRef}
+                  onChange={(ref) => change({ toRef: ref })}
+                  error={errors["caseload-to-person"]}
+                  targets={targets}
+                  exclude={fromRef}
+                  listStatus={false}
+                />
+                {/* Both people come from one colleague list, so what Casework
+                    said about it, and the way to read more, show once. */}
+                <TargetListStatus targets={targets} announce={announce} />
+              </>
+            ))}
           <InputField
-            name="move-reason"
+            name="caseload-reason"
             label={c.movementReason}
-            value={reason}
-            onChange={(value) => change(setReason, value)}
-            error={errors["move-reason"]}
+            value={value.reason}
+            onChange={(reason) => change({ reason })}
+            error={errors["caseload-reason"]}
             multiline
           />
-          <Button type="submit" variant="outline" disabled={previewPending}>
-            {c.previewCaseload}
-          </Button>
+          <div className="actions">
+            <Button type="submit" variant="outline" disabled={caseload.pending}>
+              {c.previewCaseload}
+            </Button>
+          </div>
         </fieldset>
       </form>
 
-      {pages.length > 0 && (
-        <form onSubmit={applySelected} className="flex flex-col gap-3">
-          {selections.length ? (
-            <fieldset
-              id={SELECTION_FIELD}
-              tabIndex={-1}
-              className={`field mb-0 ${errors[SELECTION_FIELD] ? "field-error" : ""}`}
-              aria-invalid={!!errors[SELECTION_FIELD]}
-              aria-describedby={
-                errors[SELECTION_FIELD] ? `${SELECTION_FIELD}-error` : undefined
-              }
-            >
-              <legend className="field-label">{c.previewChoose}</legend>
-              {errors[SELECTION_FIELD] && (
-                <p
-                  className="field-error-message"
-                  id={`${SELECTION_FIELD}-error`}
-                >
-                  {errors[SELECTION_FIELD]}
-                </p>
-              )}
-              {selections.map((selection) => {
-                const reference = caseworkReference(selection.item, c);
-                const id = selectionId(selection.ref);
-                return (
-                  <div
-                    className="flex min-h-8 items-center gap-2"
-                    key={selection.ref}
+      {caseload.failure !== undefined && renderError(caseload.failure)}
+      {previewed && (
+        <div className="staffing-preview" tabIndex={-1} ref={previewPanel}>
+          {previewed.taskCount > 0 ? (
+            <>
+              <p>
+                {fill(
+                  c.caseloadPreviewSummary,
+                  {
+                    count: previewed.taskCount,
+                    queue: previewed.queueLabel,
+                    from: nameOf(fromRef),
+                    to: nameOf(value.toRef),
+                  },
+                  locale,
+                )}
+              </p>
+              <p className="staffing-status">
+                {fill(
+                  c.caseloadPreviewExpires,
+                  { when: caseworkDateTime(previewed.expiresAt, locale) },
+                  locale,
+                )}
+              </p>
+              {!command.locked && (
+                <div className="actions">
+                  <Button
+                    onClick={() =>
+                      void applyCaseload(command, previewed, caseload.reset)
+                    }
                   >
-                    <Checkbox
-                      id={id}
-                      disabled={locked}
-                      checked={selected.has(selection.ref)}
-                      onCheckedChange={(checked) => {
-                        setSelected((current) => {
-                          const next = new Set(current);
-                          if (checked) next.add(selection.ref);
-                          else next.delete(selection.ref);
-                          return next;
-                        });
-                      }}
-                    />
-                    <label htmlFor={id} className="min-w-0 break-words">
-                      {c.caseloadSelectItem(reference)}
-                    </label>
-                  </div>
-                );
-              })}
-            </fieldset>
+                    {fill(c.confirmCaseload, { count: previewed.taskCount }, locale)}
+                  </Button>
+                </div>
+              )}
+            </>
           ) : (
-            <p>{c.previewEmpty}</p>
-          )}
-          {/* What Casework said about the page it answered, in the words
-              every screen reading a bounded page uses. */}
-          {lastPage && c.caseworkPageStatus[lastPage.status] && (
-            <p className="staffing-status text-sm text-muted-foreground">
-              {c.caseworkPageStatus[lastPage.status]}
+            <p>
+              {fill(
+                c.caseloadPreviewNothing,
+                { from: nameOf(fromRef), queue: previewed.queueLabel },
+                locale,
+              )}
             </p>
           )}
-          {lastPage?.nextCursor && (
-            <p className="staffing-status text-sm text-muted-foreground">
-              {c.previewMorePages}
-            </p>
-          )}
-          {settled && remainder > 0 && (
-            <p className="text-sm text-muted-foreground">
-              {c.cannotMove(remainder)}
-            </p>
-          )}
-          <div className="actions">
-            {lastPage?.nextCursor && (
-              <Button
-                variant="outline"
-                disabled={previewPending || locked}
-                onClick={() => void preview(lastPage.nextCursor)}
-              >
-                {c.loadMorePreview}
-              </Button>
-            )}
-            {selections.length > 0 && !locked && (
-              <Button type="submit">{c.applySelected(ticked)}</Button>
-            )}
-          </div>
-        </form>
+        </div>
       )}
-      {failure !== undefined && renderError(failure)}
-      {command.state.state === "refused" && renderError(command.state.error)}
-      {commandUnresolved(command.state) && (
+      {refusal &&
+        (refusal.refusal.kind === "expired-reference" ? (
+          <Notice tone="warning">{c.caseloadPreviewGone}</Notice>
+        ) : (
+          renderError(refusal.error)
+        ))}
+      {commandUnresolved(settled) && (
         <UnknownWrite
           message={c.caseloadUnknown}
-          state={command.state}
-          retry={() => void settle(command.retry())}
+          state={settled}
+          retry={() => void settleCaseload(command.retry(), caseload.reset)}
           dismiss={command.dismissUnknown}
         />
       )}
-      {/* Casework answers per item, and some of those answers are refusals, so
-          the results are read as a list of outcomes, not as one success. */}
-      {result?.outcome === "confirmed" && (
-        <section
-          className="staffing-results"
-          tabIndex={-1}
-          ref={caseloadOutcome}
-        >
-          <h3 className="font-medium">{c.caseloadResults}</h3>
-          <p>{c.caseloadConfirmed}</p>
-          <ul className="list-disc ps-5">
-            {result.items.map((item) => {
-              const selection = selections.find(
-                (candidate) => candidate.item.id === item.itemId,
-              );
-              return (
-                <li key={item.itemId}>
-                  {selection ? (
-                    <CaseworkReference item={selection.item} />
-                  ) : (
-                    c.unnamedRequest
-                  )}
-                  : {c.resultLabels[item.result]}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-      <DialogFooter>
-        {!locked && (
-          <DialogClose render={<Button variant="outline" />}>
-            {c.close}
-          </DialogClose>
-        )}
-      </DialogFooter>
-    </>
-  );
-}
-
-/**
- * The group of ticks is the field an error summary link reaches: the ticks
- * themselves are labelled controls inside it, and the group is what the
- * officer has to answer.
- */
-const SELECTION_FIELD = "caseload-selection";
-
-/** The DOM id of one selectable item, so its own label can reach it. */
-function selectionId(ref: string): string {
-  return `caseload-item-${ref}`;
-}
-
-/** The staffing action Casework offers for reassigning one item, if any. */
-function assignAction(item: CaseworkWorkItem) {
-  return item.staffingActions?.find((action) => action.name === "assign");
-}
-
-/** What one item's reassignment came to, in the words the results list uses. */
-function reassignResult(state: CommandState<unknown>): ReassignResult {
-  if (state.state === "confirmed") return "reassigned";
-  if (state.state !== "refused") return "unknown";
-  const kind = state.refusal.kind;
-  if (kind === "expired-reference") return "expired";
-  if (kind === "stale" || kind === "held-elsewhere" || kind === "key-reused")
-    return "conflict";
-  return "refused";
-}
-
-/**
- * Reassigning the items a supervisor selected. Casework takes one command per
- * item, each from the item's own staffing action, and answers for each; an
- * item it offers no reassignment on is listed with the reason, not dropped.
- */
-export function ReassignDialog({
-  open,
-  onOpenChange,
-  items,
-  finalFocus,
-  onReassigned,
-  renderError,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  items: readonly CaseworkWorkItem[];
-  finalFocus: FinalFocus;
-  /** The items Casework confirmed reassigned, as each answer arrives. */
-  onReassigned: (ids: string[]) => void;
-  renderError: RenderError;
-}) {
-  const c = useCaseworkContent();
-  const [unresolved, setUnresolved] = useState(false);
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (next || !unresolved) onOpenChange(next);
-      }}
-    >
-      <DialogContent
-        showCloseButton={false}
-        finalFocus={finalFocus}
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"
-      >
-        <DialogHeader>
-          <DialogTitle className="mb-0">
-            {c.reassignTitle(items.length)}
-          </DialogTitle>
-        </DialogHeader>
-        <ReassignBody
-          items={items}
-          onReassigned={onReassigned}
-          onUnresolvedChange={setUnresolved}
-          renderError={renderError}
-        />
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-export function ReassignBody({
-  items,
-  onReassigned,
-  onUnresolvedChange,
-  renderError,
-}: {
-  items: readonly CaseworkWorkItem[];
-  onReassigned: (ids: string[]) => void;
-  onUnresolvedChange: (unresolved: boolean) => void;
-  renderError: RenderError;
-}) {
-  const c = useCaseworkContent();
-  const [announcement, announce] = useAnnouncement();
-  // A target reference is issued for one queue, so one reassignment serves
-  // one queue: the first queue an assignable item is in.
-  const queue = items.find((item) => assignAction(item))?.queue;
-  const movable = items.filter(
-    (item) => assignAction(item) && item.queue === queue,
-  );
-  const targets = useStaffingTargets(
-    queue ? { purpose: "assignment", queue, limit: "100" } : null,
-  );
-  const [targetRef, setTargetRef] = useState("");
-  const [reason, setReason] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  // One attempt per item, sharing the item's assignment form: an unresolved
-  // assignment of an item, made here or there, locks both.
-  const batch = useStaffingAssignments(movable.map((item) => item.id));
-  const [answered, setAnswered] = useState(0);
-  useEffect(
-    () => onUnresolvedChange(batch.locked),
-    [onUnresolvedChange, batch.locked],
-  );
-
-  /** Reports what Casework confirmed and moves focus to the results. */
-  async function report(
-    answer: Promise<Record<string, CommandState<unknown>>>,
-  ) {
-    const settled = await answer;
-    const moved = Object.entries(settled)
-      .filter(([, state]) => state.state === "confirmed")
-      .map(([id]) => id);
-    if (moved.length) onReassigned(moved);
-    setAnswered((count) => count + 1);
-  }
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    if (batch.locked) return;
-    if (!targetRef) {
-      setErrors({ "reassign-target": c.requiredError });
-      return;
-    }
-    setErrors({});
-    void report(
-      batch.run(
-        movable.map((item) => ({
-          target: item.id,
-          input: {
-            actionRef: assignAction(item)!.ref,
-            targetRef,
-            ...(reason.trim() ? { reason: reason.trim() } : {}),
-          },
-        })),
-      ),
-    );
-  }
-
-  const unmovable = items.filter((item) => !movable.includes(item));
-  // Rows are listed once an item has an answer, or is being asked again.
-  const answeredItems = movable.filter((item) => {
-    const state = batch.stateOf(item.id).state;
-    return state !== "idle" && state !== "sending";
-  });
-  const sent = movable.some((item) => batch.stateOf(item.id).state !== "idle");
-  // Sending unmounts the form and the submit button that held focus. Taking
-  // focus in the same commit keeps the dialog from reclaiming it for itself a
-  // frame later, which an answer arriving sooner than that would lose to.
-  const results = useOutcomeFocus<HTMLElement>(sent);
-  // A retry leaves the batch sent, so each answer after it brings focus back
-  // to the results too.
-  useEffect(() => {
-    if (answered) results.current?.focus();
-  }, [answered, results]);
-  const unresolvedIds = movable
-    .map((item) => item.id)
-    .filter((id) => commandUnresolved(batch.stateOf(id)));
-  const stuckIds = unresolvedIds.filter((id) =>
-    staffingWriteStuck(batch.stateOf(id)),
-  );
-  const retriable = unresolvedIds.filter((id) => !stuckIds.includes(id));
-  return (
-    <>
-      <LiveAnnouncer message={announcement} />
-      {movable.length > 0 && !sent && (
-        <DialogDescription className="mb-0">
-          {c.reassignDescription}
-        </DialogDescription>
-      )}
-      {unmovable.length > 0 && (
-        <div className="flex flex-col gap-1">
-          {unmovable.map((item) => {
-            const reference = caseworkReference(item, c);
-            return (
-              <p
-                key={item.id}
-                className="team-unmovable text-sm text-muted-foreground"
-              >
-                {assignAction(item)
-                  ? c.otherQueue(reference, item.queueLabel)
-                  : c.notReassignable(reference)}
-              </p>
-            );
-          })}
+      {moved !== undefined && (
+        <div className="staffing-outcome" tabIndex={-1} ref={movedPanel}>
+          <Notice tone="success">{fill(c.caseloadMoved, { count: moved }, locale)}</Notice>
         </div>
-      )}
-      {movable.length > 0 && !sent && (
-        <form
-          id="reassign-form"
-          className="*:last:mb-0"
-          noValidate
-          onSubmit={submit}
-        >
-          <ErrorSummary errors={errors} />
-          {targets.isPending ? (
-            <Loading />
-          ) : targets.error ? (
-            renderError(targets.error, () => void targets.refetch())
-          ) : (
-            <>
-              <TargetCombobox
-                inline
-                name="reassign-target"
-                label={c.assignmentTarget}
-                value={targetRef}
-                onChange={setTargetRef}
-                error={errors["reassign-target"]}
-                targets={targets}
-                announce={announce}
-              />
-              <InputField
-                name="reassign-reason"
-                label={c.reassignReason}
-                value={reason}
-                onChange={setReason}
-                hint={c.assignmentReasonHint}
-                required={false}
-                multiline
-              />
-            </>
-          )}
-        </form>
-      )}
-      {sent && (
-        <section className="team-results" tabIndex={-1} ref={results}>
-          <h3 className="font-medium">{c.reassignResults}</h3>
-          <ul className="list-disc ps-5">
-            {answeredItems.map((item) => (
-              <li key={item.id}>
-                <CaseworkReference item={item} />:{" "}
-                {c.reassignResultLabels[reassignResult(batch.stateOf(item.id))]}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {retriable.length > 0 ? (
-        <UnknownWrite
-          message={c.reassignUnknown}
-          state={batch.stateOf(retriable[0]!)}
-          busy={batch.busy}
-          retry={() => void report(batch.retry())}
-          dismiss={() => undefined}
-        />
-      ) : (
-        stuckIds.length > 0 && (
-          <UnknownWrite
-            message={c.reassignUnknown}
-            state={batch.stateOf(stuckIds[0]!)}
-            retry={() => undefined}
-            dismiss={() => {
-              for (const id of stuckIds) batch.dismissUnknown(id);
-            }}
-          />
-        )
-      )}
-      {!batch.locked && (
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
-            {movable.length > 0 && !sent ? c.cancel : c.close}
-          </DialogClose>
-          {movable.length > 0 && !sent && !targets.error && (
-            <Button type="submit" form="reassign-form">
-              {c.reassignSubmit(movable.length)}
-            </Button>
-          )}
-        </DialogFooter>
       )}
     </>
   );

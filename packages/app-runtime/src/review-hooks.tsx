@@ -1,5 +1,5 @@
 /**
- * Hooks for Casework review tasks and the BREG change request they review. Every write
+ * Hooks for Casework review tasks and the BReg change request they review. Every write
  * goes through `useCommand`, keyed by an attempt id the host retains; nothing here retries
  * on its own. A read back after a refused resend is a read, not a write.
  */
@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   useInfiniteQuery,
   useQuery,
+  useQueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
 import {
@@ -25,6 +26,7 @@ import type {
   CaseworkTaskDispatchResult,
 } from "./casework-task-types.js";
 import type {
+  OwnReviewDecisionFilters,
   ReviewCommandResult,
   ReviewDecision,
   ReviewDraftResult,
@@ -35,15 +37,18 @@ import type {
   ReviewQueueFilters,
   ReviewReadBack,
   ReviewTask,
+  SupervisoryReviewFilters,
 } from "./review-types.js";
 
 /** Everything a review write can change on the page. */
-function reviewKeys(scope: string, taskId: string): QueryKey[] {
+export function reviewKeys(scope: string, taskId: string): QueryKey[] {
   return [
     [scope, "review-task", taskId],
     [scope, "review-queue"],
+    [scope, "supervisory-reviews"],
+    [scope, "own-review-decisions"],
     [scope, "review-history"],
-    // The decision reaches the request BREG holds through a delivery; a request read
+    // The decision reaches the request BReg holds through a delivery; a request read
     // held before it is read again rather than shown as still awaiting review.
     [scope, "record"],
   ];
@@ -57,6 +62,40 @@ export function useReviewQueue(filters: ReviewQueueFilters = {}) {
     queryFn: () => host.reviewQueue(filters),
   });
 }
+/**
+ * The earliest due task this officer may take, in `queue` when one is named; null when
+ * none is waiting. It is read again with the queue.
+ */
+export function useNextReviewTask(queue?: string) {
+  const host = useHost(),
+    session = useAuthority();
+  return useQuery({
+    queryKey: [session.scope, "review-queue", "next", queue ?? null],
+    queryFn: () => host.nextReviewTask(queue),
+  });
+}
+export function useOwnReviewDecisions(filters: OwnReviewDecisionFilters = {}) {
+  const host = useHost(),
+    session = useAuthority();
+  const client = useQueryClient();
+  const key = (page: OwnReviewDecisionFilters) => [
+    session.scope,
+    "own-review-decisions",
+    page,
+  ];
+  const read = useQuery({
+    queryKey: key(filters),
+    queryFn: () => host.ownReviewDecisions(filters),
+    // An expired continuation must restart without its cursor, not be retried.
+    retry: false,
+  });
+  return {
+    ...read,
+    /** Clear this session's exact first page before explicit refresh/navigation. */
+    resetFirstPage: (page: Omit<OwnReviewDecisionFilters, "cursor">) =>
+      client.resetQueries({ queryKey: key(page), exact: true }),
+  };
+}
 
 export function useReviewTask(taskId: string) {
   const host = useHost(),
@@ -64,6 +103,25 @@ export function useReviewTask(taskId: string) {
   return useQuery({
     queryKey: [session.scope, "review-task", taskId],
     queryFn: () => host.reviewTask(taskId),
+  });
+}
+
+export function useSupervisoryReviews(filters: SupervisoryReviewFilters = {}) {
+  const host = useHost(),
+    session = useAuthority();
+  return useQuery({
+    queryKey: [session.scope, "supervisory-reviews", filters],
+    queryFn: () => host.supervisoryReviews(filters),
+  });
+}
+
+/** How review works here: the stages, deadlines and outcomes of each policy. */
+export function useReviewPolicies() {
+  const host = useHost(),
+    session = useAuthority();
+  return useQuery({
+    queryKey: [session.scope, "review-policies"],
+    queryFn: () => host.reviewPolicies(),
   });
 }
 
@@ -111,8 +169,7 @@ export const holdCommand: CommandSpec<HoldInput, ReviewCommandResult> = {
   invalidates: (_value, scope) => [
     [scope, "review-task"],
     [scope, "review-queue"],
-    // The inbox row of the same request shows who holds its review.
-    [scope, "casework-items"],
+    [scope, "supervisory-reviews"],
   ],
   recoverAcrossSessions: true,
 };
@@ -475,6 +532,7 @@ const assignmentCommand: CommandSpec<AssignmentInput, ReviewCommandResult> = {
   invalidates: (_value, scope) => [
     [scope, "review-task"],
     [scope, "review-queue"],
+    [scope, "supervisory-reviews"],
   ],
 };
 export function useReviewTaskAssignment(taskId: string) {
@@ -497,7 +555,7 @@ export function useReviewTaskAssignment(taskId: string) {
   };
 }
 
-/** The agent-task calls one panel makes, bound to a work item or a review task. */
+/** The agent-task calls one panel makes, bound to a review task. */
 export interface TaskGrantCalls {
   previews(): Promise<CaseworkTaskPreviewList>;
   list(): Promise<CaseworkTaskGrantList>;

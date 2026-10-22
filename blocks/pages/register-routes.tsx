@@ -40,6 +40,13 @@ export interface RegisterRoutes {
   /** The form that asks for a change to one record. */
   changeRecord(id: string): string;
   /**
+   * The form that starts a request away from any record's page: a request
+   * that only creates, or one whose record is picked on the form. The route
+   * names the request entity as a request route does. An app that names no
+   * route for it offers none.
+   */
+  createRequest?: string;
+  /**
    * The form that invokes one of the registry's governed actions on these
    * records, by action id. An app that names no route for it offers none.
    */
@@ -93,6 +100,7 @@ export function registerRoutesUnder(
     createRecord: `${recordsPath}/create`,
     record: (id) => under(recordsPath, id),
     changeRecord: (id) => `${under(recordsPath, id)}/change`,
+    createRequest: `${requestsPath}/create`,
     recordAction: (id) => under(`${recordsPath}/actions`, id),
     action: (recordId, actionId) =>
       under(`${under(recordsPath, recordId)}/actions`, actionId),
@@ -135,6 +143,7 @@ export type RegisterRouteMatch =
   | { kind: "createRecord" }
   | { kind: "record"; id: string }
   | { kind: "changeRecord"; id: string }
+  | { kind: "createRequest" }
   | { kind: "recordAction"; id: string }
   | { kind: "action"; id: string; actionId: string }
   | { kind: "requests" }
@@ -144,6 +153,16 @@ export type RegisterRouteMatch =
 
 function segmentsOf(path: string): string[] {
   return path.split("/").filter(Boolean);
+}
+
+/** A path segment decoded; null where it is not valid percent-encoding, so such a path matches no route. */
+export function decodeSegment(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment);
+  } catch (error) {
+    if (error instanceof URIError) return null;
+    throw error;
+  }
 }
 
 // A path built from a route function for ids no real id could ever equal,
@@ -170,9 +189,11 @@ function matchCaptures(
     const sentinel = sentinels.find(
       (item) => encodeURIComponent(item) === patternSegments[i],
     );
-    if (sentinel !== undefined)
-      captured.set(sentinel, decodeURIComponent(pathSegments[i]));
-    else if (patternSegments[i] !== pathSegments[i]) return null;
+    if (sentinel !== undefined) {
+      const decoded = decodeSegment(pathSegments[i]!);
+      if (decoded === null) return null;
+      captured.set(sentinel, decoded);
+    } else if (patternSegments[i] !== pathSegments[i]) return null;
   }
   return captured;
 }
@@ -195,6 +216,8 @@ export function matchRegisterRoute(
   if (path === routes.records) return { kind: "records" };
   if (path === routes.createRecord) return { kind: "createRecord" };
   if (path === routes.requests) return { kind: "requests" };
+  if (routes.createRequest !== undefined && path === routes.createRequest)
+    return { kind: "createRequest" };
   // A record id is the registry's own identifier, never the word an action
   // route places beside it, so an action form is matched first.
   const actionId = routes.recordAction

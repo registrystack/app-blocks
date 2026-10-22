@@ -1,7 +1,12 @@
 import { ArrowRight } from "lucide-react";
 import { problemView } from "@registrystack/app-runtime";
 import { Button } from "@/components/ui/button";
-import { useBlockContent } from "@/blocks/lib/content";
+import {
+  ConfirmedReceipt,
+  useBlockContent,
+  useLocale,
+} from "@/blocks/lib/content";
+import { fillNodes } from "@/blocks/lib/format";
 import { Notice } from "@/blocks/lib/notice";
 import { ErrorPanel } from "@/blocks/shell/error-panel";
 
@@ -34,6 +39,7 @@ export function TaskFeedback({
   reconcileHref,
   onConfirmed,
   confirmedLabel,
+  recordWrite,
 }: {
   task: TaskFeedbackState;
   /** Where "Check current records" points. */
@@ -41,23 +47,33 @@ export function TaskFeedback({
   onConfirmed?: (id: string) => void;
   /** What the button that opens the confirmed resource says; "Open request" by default. */
   confirmedLabel?: string;
+  /** The task writes records, so a conflict is with the values it sent. */
+  recordWrite?: boolean;
 }) {
   const c = useBlockContent();
+  const locale = useLocale();
   const result = task.result;
   const problem = problemView(task.error);
-  const retryRefusal = problem.message;
   if (task.pending) return <Notice>{c.saving}</Notice>;
   if (task.unknown)
     return (
       <Notice tone="warning" title={c.unknownTitle}>
         <p>{c.unknownBody}</p>
-        {retryRefusal !== null && (
+        {problem.status !== null && (
           <p>
-            {c.retryRefused} {retryRefusal}
+            {c.retryRefused}
+            {problem.message !== null && ` ${problem.message}`}
           </p>
         )}
         <p className="reference">
-          {c.receipt}: <span className="font-mono">{task.reference}</span>
+          {fillNodes(
+            c.labelled,
+            {
+              label: c.receipt,
+              value: <span className="font-mono">{task.reference}</span>,
+            },
+            locale,
+          )}
         </p>
         <div className="actions">
           <Button onClick={() => void task.retry()}>{c.exactRetry}</Button>
@@ -71,19 +87,18 @@ export function TaskFeedback({
   // form's error summary, against those fields.
   if (task.error && problem.worded && Object.keys(problem.fieldErrors).length)
     return null;
-  if (task.error) return <ErrorPanel error={task.error} />;
+  if (task.error)
+    return <ErrorPanel error={task.error} recordWrite={recordWrite} />;
   if (result?.outcome === "confirmed")
     return (
       <Notice tone="success" title={c.confirmed}>
-        <p className="reference">
-          {c.receipt}: <span className="font-mono">{result.receipt}</span>
-        </p>
         {onConfirmed && result.resource && (
           <Button onClick={() => onConfirmed(result.resource!.id)}>
             {confirmedLabel ?? c.openRequest}
             <ArrowRight />
           </Button>
         )}
+        <ConfirmedReceipt receipt={result.receipt} />
       </Notice>
     );
   return null;

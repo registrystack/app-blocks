@@ -15,8 +15,8 @@ import {
   useCaseworkDirectory,
   useCaseworkSetup,
 } from "@registrystack/app-runtime/react";
-import { fill } from "@/blocks/lib/format";
-import { useBlockContent } from "@/blocks/lib/content";
+import { fill, listOf } from "@/blocks/lib/format";
+import { useBlockContent, useLocale } from "@/blocks/lib/content";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { useCaseworkContent, type CaseworkContent } from "@/blocks/casework/casework-content";
@@ -34,8 +34,8 @@ export const teamNameField = "team-name",
   leaderField = "team-leader",
   queueField = "queue";
 
-/** What the administrator has typed. Kept exactly as typed so Back restores it;
-    the wire values are derived from it and trimmed. */
+/** What the administrator has typed. Kept exactly as typed for confirmation,
+    submission and Back navigation; principal whitespace can be meaningful. */
 interface SetupDraft {
   teamId: string;
   staffText: string;
@@ -52,14 +52,38 @@ const emptyDraft: SetupDraft = {
 /** The frozen `CaseworkSetupInput` the host receives, built from what was typed. */
 export function wireValues(draft: SetupDraft): CaseworkSetupInput {
   return {
-    teamId: draft.teamId.trim(),
+    teamId: draft.teamId,
     staffSubjects: draft.staffText
       .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean),
-    supervisorSubject: draft.supervisorSubject.trim(),
-    queueId: draft.queueId.trim(),
+      .filter((line) => line.length > 0),
+    supervisorSubject: draft.supervisorSubject,
+    queueId: draft.queueId,
   };
+}
+
+const maximumIdentifierBytes = 128;
+const maximumPrincipalBytes = 2_048;
+const maximumStaff = 100;
+const directoryIdentifier = /^[A-Za-z0-9._-]+$/;
+const unicodeControl = /[\u0000-\u001f\u007f-\u009f]/u;
+
+function byteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+function validDirectoryIdentifier(value: string): boolean {
+  return (
+    byteLength(value) <= maximumIdentifierBytes &&
+    directoryIdentifier.test(value)
+  );
+}
+
+function validDirectoryPrincipal(value: string): boolean {
+  return (
+    value.trim().length > 0 &&
+    byteLength(value) <= maximumPrincipalBytes &&
+    !unicodeControl.test(value)
+  );
 }
 
 /** The checks the administrator can be told about before anything is sent. */
@@ -67,14 +91,37 @@ export function setupErrors(
   input: CaseworkSetupInput,
   directory: CaseworkDirectory | undefined,
   c: CaseworkContent,
+  locale: string,
 ): Record<string, string> {
   const found: Record<string, string> = {};
   if (!input.teamId) found[teamNameField] = c.setupTeamNameRequired;
+  else if (!validDirectoryIdentifier(input.teamId))
+    found[teamNameField] = c.setupTeamNameInvalid;
   else if (directory?.teams.some((team) => team.id === input.teamId))
-    found[teamNameField] = fill(c.setupTeamNameTaken, { name: input.teamId });
+    found[teamNameField] = fill(
+      c.setupTeamNameTaken,
+      { name: input.teamId },
+      locale,
+    );
   if (!input.staffSubjects.length) found[staffField] = c.setupStaffRequired;
+  else if (input.staffSubjects.length > maximumStaff)
+    found[staffField] = c.setupStaffTooMany;
+  else if (new Set(input.staffSubjects).size !== input.staffSubjects.length)
+    found[staffField] = c.setupStaffDuplicate;
+  else if (
+    input.staffSubjects.some((subject) => !validDirectoryPrincipal(subject))
+  )
+    found[staffField] = c.setupStaffInvalid;
   if (!input.supervisorSubject) found[leaderField] = c.setupLeaderRequired;
+  else if (!validDirectoryPrincipal(input.supervisorSubject))
+    found[leaderField] = c.setupLeaderInvalid;
   if (!input.queueId) found[queueField] = c.setupQueueRequired;
+  else if (
+    !validDirectoryIdentifier(input.queueId) ||
+    (directory !== undefined &&
+      !directory.queues.some((queue) => queue.id === input.queueId))
+  )
+    found[queueField] = c.setupQueueInvalid;
   return found;
 }
 
@@ -196,6 +243,7 @@ function SetupField({
 /** The teams Casework already holds, so the administrator is not guessing. */
 export function ExistingTeams({ directory }: { directory: CaseworkDirectory }) {
   const c = useCaseworkContent();
+  const locale = useLocale();
   if (!directory.teams.length) return <p className="muted">{c.setupNoTeams}</p>;
   const columns: QueueColumn<CaseworkTeam>[] = [
     {
@@ -218,7 +266,10 @@ export function ExistingTeams({ directory }: { directory: CaseworkDirectory }) {
       key: "queues",
       header: c.setupQueuesColumn,
       cell: (team) =>
-        team.queues.map((id) => queueLabel(directory, id)).join(", "),
+        listOf(
+          team.queues.map((id) => queueLabel(directory, id)),
+          locale,
+        ),
     },
   ];
   return (
@@ -270,7 +321,7 @@ export function SetupCheck({
                 disabled={pending}
                 onClick={() => onChangeAnswer(teamNameField)}
               >
-                {c.setupChangeAnswer(c.setupTeamName)}
+                {c.setupChangeTeamName}
               </Button>
             </dd>
           </div>
@@ -288,7 +339,7 @@ export function SetupCheck({
                 disabled={pending}
                 onClick={() => onChangeAnswer(staffField)}
               >
-                {c.setupChangeAnswer(c.setupCheckStaff)}
+                {c.setupChangeStaff}
               </Button>
             </dd>
           </div>
@@ -302,7 +353,7 @@ export function SetupCheck({
                 disabled={pending}
                 onClick={() => onChangeAnswer(leaderField)}
               >
-                {c.setupChangeAnswer(c.setupCheckLeader)}
+                {c.setupChangeLeader}
               </Button>
             </dd>
           </div>
@@ -316,14 +367,14 @@ export function SetupCheck({
                 disabled={pending}
                 onClick={() => onChangeAnswer(queueField)}
               >
-                {c.setupChangeAnswer(c.setupCheckQueue)}
+                {c.setupChangeQueue}
               </Button>
             </dd>
           </div>
         </dl>
         <div className="actions">
           <Button onClick={onCreate} disabled={pending}>
-            {c.setupCreate}
+            {pending ? c.setupCreating : c.setupCreate}
           </Button>
           <Button variant="ghost" onClick={onBack} disabled={pending}>
             {c.setupBack}
@@ -348,18 +399,21 @@ export function SetupDone({
   onReset: () => void;
 }) {
   const c = useCaseworkContent();
+  const locale = useLocale();
   return (
     <>
       <LiveAnnouncer message={announcement} />
       <Heading
-        title={fill(c.setupDoneTitle, { name: created.teamId })}
+        title={fill(c.setupDoneTitle, { name: created.teamId }, locale)}
         description={c.setupDoneNext}
       />
       <section className="card setup-check">
         <p>
-          {fill(c.setupDoneQueue, {
-            queue: queueLabel(directory, created.queueId),
-          })}
+          {fill(
+            c.setupDoneQueue,
+            { queue: queueLabel(directory, created.queueId) },
+            locale,
+          )}
         </p>
         <div className="actions">
           <Button onClick={onReset}>{c.setupAnother}</Button>
@@ -370,17 +424,29 @@ export function SetupDone({
 }
 
 /** The administrator's one-time bootstrap of a team, its people and its queue. */
-export function CaseworkSetup({ renderError }: { renderError: RenderError }) {
+export function CaseworkSetup({ renderError, onDirtyChange, onDone, queues }: {
+  renderError: RenderError;
+  onDirtyChange?: (dirty: boolean) => void;
+  /** An app can end the bootstrap journey instead of offering another team. */
+  onDone?: () => void;
+  /** Restrict initial setup to the configured queues that still need a team. */
+  queues?: CaseworkDirectory["queues"];
+}) {
   const c = useCaseworkContent();
+  const locale = useLocale();
   const directory = useCaseworkDirectory();
   const { setup, pending, error } = useCaseworkSetup();
   const [draft, setDraft] = useState(emptyDraft);
   const [step, setStep] = useState<"form" | "check" | "done">("form");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errorFocusRequest, setErrorFocusRequest] = useState(0);
   const [created, setCreated] = useState<CaseworkSetupInput | null>(null);
   const [announcement, announce] = useAnnouncement();
   const editField = useRef<string | null>(null);
   const input = wireValues(draft);
+  useEffect(() => {
+    onDirtyChange?.(step !== "done" && Object.values(draft).some((value) => value.length > 0));
+  }, [draft, step, onDirtyChange]);
   useEffect(() => {
     if (step !== "form" || !editField.current) return;
     const field = editField.current;
@@ -396,16 +462,28 @@ export function CaseworkSetup({ renderError }: { renderError: RenderError }) {
 
   function check(event: FormEvent) {
     event.preventDefault();
-    const found = setupErrors(input, directory.data, c);
+    const found = setupErrors(input, directory.data, c, locale);
     setErrors(found);
-    if (!Object.keys(found).length) setStep("check");
+    if (Object.keys(found).length)
+      setErrorFocusRequest((request) => request + 1);
+    else setStep("check");
+  }
+
+  function changeField(field: string, patch: Partial<SetupDraft>) {
+    setDraft((previous) => ({ ...previous, ...patch }));
+    setErrors((previous) => {
+      if (!(field in previous)) return previous;
+      const next = { ...previous };
+      delete next[field];
+      return next;
+    });
   }
 
   async function create() {
     if (!(await setup(input))) return;
     setCreated(input);
     setStep("done");
-    announce(fill(c.setupDoneTitle, { name: input.teamId }));
+    announce(fill(c.setupDoneTitle, { name: input.teamId }, locale));
     void directory.refetch();
   }
 
@@ -416,6 +494,7 @@ export function CaseworkSetup({ renderError }: { renderError: RenderError }) {
         directory={directory.data}
         announcement={announcement}
         onReset={() => {
+          if (onDone) { onDone(); return; }
           setDraft(emptyDraft);
           setCreated(null);
           setErrors({});
@@ -450,7 +529,7 @@ export function CaseworkSetup({ renderError }: { renderError: RenderError }) {
       )}
       <form className="card form-card setup-form" noValidate onSubmit={check}>
         <h2>{c.setupCreateHeading}</h2>
-        <ErrorSummary errors={errors} />
+        <ErrorSummary errors={errors} focusRequest={errorFocusRequest} />
         <SetupField
           name={teamNameField}
           label={c.setupTeamName}
@@ -458,7 +537,7 @@ export function CaseworkSetup({ renderError }: { renderError: RenderError }) {
           example={c.setupTeamNameExample}
           error={errors[teamNameField]}
           value={draft.teamId}
-          onChange={(teamId) => setDraft({ ...draft, teamId })}
+          onChange={(teamId) => changeField(teamNameField, { teamId })}
         />
         <SetupField
           name={staffField}
@@ -467,7 +546,7 @@ export function CaseworkSetup({ renderError }: { renderError: RenderError }) {
           example={c.setupStaffExample}
           error={errors[staffField]}
           value={draft.staffText}
-          onChange={(staffText) => setDraft({ ...draft, staffText })}
+          onChange={(staffText) => changeField(staffField, { staffText })}
           multiline
         />
         <SetupField
@@ -478,7 +557,7 @@ export function CaseworkSetup({ renderError }: { renderError: RenderError }) {
           error={errors[leaderField]}
           value={draft.supervisorSubject}
           onChange={(supervisorSubject) =>
-            setDraft({ ...draft, supervisorSubject })
+            changeField(leaderField, { supervisorSubject })
           }
         />
         <SetupField
@@ -488,8 +567,8 @@ export function CaseworkSetup({ renderError }: { renderError: RenderError }) {
           example={directory.data ? undefined : c.setupQueueExample}
           error={errors[queueField]}
           value={draft.queueId}
-          onChange={(queueId) => setDraft({ ...draft, queueId })}
-          queues={directory.data?.queues}
+          onChange={(queueId) => changeField(queueField, { queueId })}
+          queues={queues ?? directory.data?.queues}
         />
         <div className="actions">
           <Button type="submit">{c.setupContinue}</Button>

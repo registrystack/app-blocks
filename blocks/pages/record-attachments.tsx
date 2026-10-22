@@ -2,8 +2,8 @@ import type { AttachmentSlot } from "@registrystack/app-runtime";
 import { documentPreviewTypes } from "@registrystack/app-runtime";
 import { useAttachmentHref } from "@registrystack/app-runtime/react";
 import { Button } from "@/components/ui/button";
-import { useBlockContent } from "@/blocks/lib/content";
-import { fill } from "@/blocks/lib/format";
+import { useBlockContent, useLocale } from "@/blocks/lib/content";
+import { fill, fillNodes, inSentence } from "@/blocks/lib/format";
 import { Notice } from "@/blocks/lib/notice";
 import {
   SlotView,
@@ -19,9 +19,16 @@ import {
 import type { DocumentSource } from "@/blocks/documents/document-view";
 import { ErrorPanel } from "@/blocks/shell/error-panel";
 import { splitRoute, useRoute } from "@/blocks/shell/routing";
-import { usePagesContent } from "@/blocks/pages/pages-content";
+import {
+  usePagesContent,
+  type PagesContent,
+} from "@/blocks/pages/pages-content";
 import { useRegisterRoutes } from "@/blocks/pages/register-routes";
-import { recordPath, useRegister } from "@/blocks/pages/record";
+import {
+  recordPath,
+  useRegister,
+  type RegisterEntities,
+} from "@/blocks/pages/record";
 
 export { useDocumentSelection };
 
@@ -30,6 +37,27 @@ export interface AttachmentsRecord {
   entity: string;
   id: string;
   revision: string;
+}
+
+/** The entity-specific slot words from the served model, with app-wide fallbacks. */
+function attachmentLabel(
+  entities: RegisterEntities | null,
+  entity: string,
+  slot: string,
+  pages: PagesContent,
+): string {
+  const model =
+    entities &&
+    [
+      entities.record,
+      ...(entities.records ?? []),
+      ...(entities.requests ?? []),
+    ].find((candidate) => candidate.id === entity);
+  return (
+    model?.operations.attachments?.find((item) => item.slot === slot)?.label ??
+    pages.attachmentSlots[slot] ??
+    pages.attachmentSlotFallback
+  );
 }
 
 /** A slot's removal command, in the shape every command reads. */
@@ -58,6 +86,8 @@ export function SupportingDocuments({
   openPdf,
   useUpload,
   useRemoval,
+  writesDisabled = false,
+  onWritingChange,
 }: {
   record: AttachmentsRecord;
   slots?: AttachmentSlot[];
@@ -70,8 +100,13 @@ export function SupportingDocuments({
   ) => Promise<DocumentSource>;
   useUpload: (slot: string) => UploadOutcome;
   useRemoval: (slot: string) => RemovalOutcome;
+  /** Prevents a write while the record revision is being refreshed. */
+  writesDisabled?: boolean;
+  /** Reports writes for this record so another action cannot race them. */
+  onWritingChange?: (slot: string, writing: boolean) => void;
 }) {
   const pages = usePagesContent();
+  const register = useRegister();
   const attachmentHref = useAttachmentHref();
   const selection = useDocumentSelection(slots);
   if (!slots?.length) return null;
@@ -88,6 +123,8 @@ export function SupportingDocuments({
           onPreview={onPreview ?? selection.select}
           useUpload={useUpload}
           useRemoval={useRemoval}
+          writesDisabled={writesDisabled}
+          onWritingChange={onWritingChange}
         />
       )}
     >
@@ -96,10 +133,12 @@ export function SupportingDocuments({
           key={`${owner}:${selection.slot.slot}:${version(selection.slot.file)}`}
           href={href(selection.slot.slot)}
           file={selection.slot.file}
-          label={
-            pages.attachmentSlots[selection.slot.slot] ??
-            pages.attachmentSlotFallback
-          }
+          label={attachmentLabel(
+            register.entities,
+            record.entity,
+            selection.slot.slot,
+            pages,
+          )}
           onClose={selection.close}
           openPdf={openPdf}
         />
@@ -124,11 +163,15 @@ function RecordSlot({
   record,
   useUpload,
   useRemoval,
+  writesDisabled,
+  onWritingChange,
   ...props
 }: SlotProps & {
   record: AttachmentsRecord;
   useUpload: (slot: string) => UploadOutcome;
   useRemoval: (slot: string) => RemovalOutcome;
+  writesDisabled?: boolean;
+  onWritingChange?: (slot: string, writing: boolean) => void;
 }) {
   const pages = usePagesContent(),
     routes = useRegisterRoutes(),
@@ -149,7 +192,7 @@ function RecordSlot({
       reconcileHref={path ? `#${path}` : "#/"}
       renderError={(error) => <ErrorPanel error={error} />}
       slotLabel={(slot) =>
-        pages.attachmentSlots[slot] ?? pages.attachmentSlotFallback
+        attachmentLabel(register.entities, record.entity, slot, pages)
       }
       typeLabel={(contentType) =>
         pages.attachmentTypes[contentType] ?? contentType
@@ -158,6 +201,8 @@ function RecordSlot({
         pages.attachmentStatus[status as keyof typeof pages.attachmentStatus]
       }
       canPreview={(contentType) => documentPreviewTypes.includes(contentType)}
+      writesDisabled={writesDisabled}
+      onWritingChange={onWritingChange}
     />
   );
 }
@@ -199,6 +244,7 @@ export function PendingUploadsNotice({
 function PendingUploads({ pending }: { pending: PendingUploadsState }) {
   const pages = usePagesContent(),
     block = useBlockContent(),
+    locale = useLocale(),
     routes = useRegisterRoutes(),
     register = useRegister(),
     { path, query } = splitRoute(useRoute());
@@ -230,18 +276,30 @@ function PendingUploads({ pending }: { pending: PendingUploadsState }) {
   return (
     <Notice tone="warning" title={pages.attachmentPendingTitle}>
       {uploads.map(({ upload, open }) => {
-        const label =
-          pages.attachmentSlots[upload.slot] ?? pages.attachmentSlotFallback;
+        const label = attachmentLabel(
+          register.entities,
+          upload.entity ?? register.entities?.followedRequest?.id ?? "",
+          upload.slot,
+          pages,
+        );
         return (
           <div key={upload.key}>
             <p>
-              {fill(pages.attachmentPendingBody, {
-                document: label.toLowerCase(),
-              })}
+              {fill(
+                pages.attachmentPendingBody,
+                { document: inSentence(label, locale) },
+                locale,
+              )}
             </p>
             <p className="reference">
-              {block.receipt}:{" "}
-              <span className="font-mono">{upload.reference}</span>
+              {fillNodes(
+                block.labelled,
+                {
+                  label: block.receipt,
+                  value: <span className="font-mono">{upload.reference}</span>,
+                },
+                locale,
+              )}
             </p>
             {open && (
               <div className="actions">

@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { Suspense, useMemo, type ReactNode } from "react";
 import { FileCheck2, HelpCircle, Library } from "lucide-react";
 import { useAuthority } from "@registrystack/app-runtime/react";
 import { unavailableError } from "@registrystack/app-runtime";
@@ -7,25 +7,49 @@ import { Navigation, type ShellNavItem } from "@/blocks/shell/navigation";
 import { ErrorPanel } from "@/blocks/shell/error-panel";
 import { HelpPage } from "@/blocks/shell/help-page";
 import { Introduction } from "@/blocks/shell/introduction";
+import { Loading } from "@/blocks/shell/loading";
 import { PublicShell } from "@/blocks/shell/public";
 import { Shell } from "@/blocks/shell/chrome";
 import { splitRoute, useRoute } from "@/blocks/shell/routing";
-import { useShellContent } from "@/blocks/shell/shell-content";
-import { ChangeRequestFormPage, type ChangeRequestTask } from "@/blocks/pages/change-request-form-page";
-import { CreateRecordPage, type CreateRecordTask } from "@/blocks/pages/create-record-page";
-import { RecordActionPage } from "@/blocks/pages/record-action-page";
+import { useShellContent, type ShellContent } from "@/blocks/shell/shell-content";
+import {
+  exactPath,
+  navGroups,
+  registerPath,
+  renderRoute,
+  route,
+  type AppParts,
+  type AppRoute,
+  type NavTable,
+} from "@/blocks/pages/app-routes";
+import type { ChangeRequestTask } from "@/blocks/pages/change-request-form-page";
+import type { CreateRecordTask } from "@/blocks/pages/create-record-page";
 import {
   PendingUploadsNotice,
   RecoveryNotice,
 } from "@/blocks/pages/default-notices";
 import * as defaultTasks from "@/blocks/pages/default-tasks";
 import { usePagesContent } from "@/blocks/pages/pages-content";
-import { useRegister } from "@/blocks/pages/record";
-import { RecordDetailPage } from "@/blocks/pages/record-detail-page";
-import { RecordListPage } from "@/blocks/pages/record-list-page";
-import { matchRegisterRoute, useRegisterRoutes } from "@/blocks/pages/register-routes";
-import { RequestDetailPage, type RequestDecisionTask } from "@/blocks/pages/request-detail-page";
-import { RequestQueuePage } from "@/blocks/pages/request-queue-page";
+import { navigationRequests, useRegister } from "@/blocks/pages/record";
+import {
+  ChangeRequestFormPage,
+  CreateRecordPage,
+  HolderChooseChangePage,
+  HolderChooseRecordPage,
+  HolderDocumentsPage,
+  HolderRecordListPage,
+  HolderReviewPage,
+  RecordActionPage,
+  RecordDetailPage,
+  RequestDetailPage,
+  RequestQueuePage,
+} from "@/blocks/pages/lazy-pages";
+import {
+  matchHolderStep,
+  type HolderStepMatch,
+} from "@/blocks/pages/holder-step-routes";
+import { useRegisterRoutes, type RegisterRoutes } from "@/blocks/pages/register-routes";
+import type { RequestDecisionTask } from "@/blocks/pages/request-detail-page";
 import { SessionBoundary } from "@/blocks/shell/session-boundary";
 import type { DocumentSource } from "@/blocks/documents/document-view";
 import type { RemovalOutcome } from "@/blocks/pages/record-attachments";
@@ -64,7 +88,92 @@ export interface ServiceAppProps {
    * `false` renders none.
    */
   pendingUploadsNotice?: ReactNode;
+  /** The pages, tried in order; left out, `serviceRoutes`. */
+  routes?: readonly AppRoute[];
+  /** The places in the nav; left out, `serviceNavigation`. */
+  navigation?: NavTable<ServiceNavContext, ShellNavItem>;
 }
+
+/** What the service navigation entries read to decide their items. */
+export interface ServiceNavContext {
+  shell: ShellContent;
+  labels: ServiceAppLabels;
+  routes: RegisterRoutes;
+  hasRequests: boolean;
+}
+
+/** The places a holder can go, as data: one group of entries, in order. */
+export const serviceNavigation: NavTable<ServiceNavContext, ShellNavItem> = [
+  [
+    {
+      id: "records",
+      items: ({ labels, routes }) => [
+        { path: "/", label: labels.records, icon: Library, under: [routes.records] },
+      ],
+    },
+    {
+      id: "requests",
+      items: ({ labels, routes, hasRequests }) =>
+        hasRequests
+          ? [{ path: routes.requests, label: labels.requests, icon: FileCheck2 }]
+          : [],
+    },
+    {
+      id: "help",
+      items: ({ shell }) => [{ path: "/help", label: shell.help, icon: HelpCircle }],
+    },
+  ],
+];
+
+/**
+ * The service app's routes, in the order they are tried. An app replaces one
+ * with `replaceRoute(serviceRoutes, route("record", ...))` or adds a page by
+ * listing its own route beside these.
+ */
+export const serviceRoutes: AppRoute[] = [
+  route("help", exactPath("/help"), () => <HelpPage />),
+  route("records", (path, routes) => (path === "/" || path === routes.records ? {} : null), () => (
+    <HolderRecordListPage />
+  )),
+  route("create-record", registerPath("createRecord"), (_, c) => (
+    <CreateRecordPage useTask={c.useCreateTask} />
+  )),
+  route("record-action", registerPath("recordAction"), (m, c) => (
+    <RecordActionPage actionId={m.id} useTask={c.useCreateTask} />
+  )),
+  route("change-record", registerPath("changeRecord"), (m, c) => (
+    <ChangeRequestFormPage recordId={m.id} useTask={c.useChangeTask} />
+  )),
+  route("record", registerPath("record"), (m) => <RecordDetailPage id={m.id} />),
+  route("requests", registerPath("requests"), () => <RequestQueuePage />),
+  route("edit-request", registerPath("editRequest"), (m, c) => (
+    <ChangeRequestFormPage requestId={m.id} useTask={c.useChangeTask} />
+  )),
+  route("request", registerPath("request"), (m, c) => (
+    <RequestDetailPage
+      id={m.id}
+      useTask={c.useRequestTask}
+      useUpload={c.useUpload}
+      useRemoval={c.useRemoval}
+      openPdf={c.openPdf}
+    />
+  )),
+  // Last, so a path the app's own routes answer is never taken by a step.
+  route(
+    "holder-step",
+    (path, routes): HolderStepMatch | null => matchHolderStep(routes, path),
+    (m, c) =>
+      m.kind === "chooseRecord" ? (
+        <HolderChooseRecordPage />
+      ) : m.kind === "chooseChange" ? (
+        <HolderChooseChangePage id={m.id} />
+      ) : m.kind === "documents" ? (
+        <HolderDocumentsPage id={m.id} />
+      ) : (
+        <HolderReviewPage id={m.id} useTask={c.useChangeTask} />
+      ),
+  ),
+];
 
 /**
  * The places named by the model's plural labels, and by the pages' own
@@ -74,7 +183,11 @@ function ModelLabelledServiceApp(props: ServiceAppProps) {
   const pages = usePagesContent();
   const entities = useRegister().entities;
   const records = entities?.record.pluralLabel ?? pages.ownRecordListTitle;
-  const requests = entities?.request?.pluralLabel ?? pages.holderRequestsTitle;
+  const requestEntities = entities ? navigationRequests(entities) : [];
+  const requests =
+    requestEntities.length === 1
+      ? requestEntities[0]!.pluralLabel
+      : pages.holderRequestsTitle;
   const labels = useMemo(() => ({ records, requests }), [records, requests]);
   return <ServiceWork {...props} labels={labels} />;
 }
@@ -89,52 +202,35 @@ function ProtectedServiceApp(props: ServiceAppProps) {
 
 function ServiceWork(props: ServiceAppProps & { labels: ServiceAppLabels }) {
   const session = useAuthority();
+  const entities = useRegister().entities;
   const route = useRoute();
   const { path } = splitRoute(route);
   const routes = useRegisterRoutes();
   const shell = useShellContent();
-  const match = matchRegisterRoute(routes, path);
-  const useCreateTask = props.useCreateTask ?? defaultTasks.useCreateTask;
-  const useChangeTask = props.useChangeTask ?? defaultTasks.useChangeTask;
-  const useRequestTask = props.useRequestTask ?? defaultTasks.useRequestTask;
-  const useUpload = props.useUpload ?? defaultTasks.useUpload;
-  const useRemoval = props.useRemoval ?? defaultTasks.useRemoval;
-  let page: ReactNode;
-  if (path === "/help") page = <HelpPage />;
-  else if (path === "/" || match.kind === "records") page = <RecordListPage />;
-  else if (match.kind === "createRecord")
-    page = <CreateRecordPage useTask={useCreateTask} />;
-  else if (match.kind === "recordAction")
-    page = <RecordActionPage actionId={match.id} useTask={useCreateTask} />;
-  else if (match.kind === "changeRecord")
-    page = (
-      <ChangeRequestFormPage recordId={match.id} useTask={useChangeTask} />
-    );
-  else if (match.kind === "record") page = <RecordDetailPage id={match.id} />;
-  else if (match.kind === "requests") page = <RequestQueuePage />;
-  else if (match.kind === "editRequest")
-    page = (
-      <ChangeRequestFormPage requestId={match.id} useTask={useChangeTask} />
-    );
-  else if (match.kind === "request")
-    page = (
-      <RequestDetailPage
-        id={match.id}
-        useTask={useRequestTask}
-        useUpload={useUpload}
-        useRemoval={useRemoval}
-        openPdf={props.openPdf}
-      />
-    );
-  else
-    page = (
-      <ErrorPanel error={unavailableError(shell.unavailable)} />
-    );
-  const items: ShellNavItem[] = [
-    { path: "/", label: props.labels.records, icon: Library, under: [routes.records] },
-    { path: routes.requests, label: props.labels.requests, icon: FileCheck2 },
-    { path: "/help", label: shell.help, icon: HelpCircle },
-  ];
+  const parts: AppParts = {
+    useCreateTask: props.useCreateTask ?? defaultTasks.useCreateTask,
+    useChangeTask: props.useChangeTask ?? defaultTasks.useChangeTask,
+    useRequestTask: props.useRequestTask ?? defaultTasks.useRequestTask,
+    useUpload: props.useUpload ?? defaultTasks.useUpload,
+    useRemoval: props.useRemoval ?? defaultTasks.useRemoval,
+    openPdf: props.openPdf,
+  };
+  const page = renderRoute(props.routes ?? serviceRoutes, path, routes, {
+    ...parts,
+    session,
+    redirecting: false,
+  }) ?? (
+    <ErrorPanel
+      error={unavailableError(shell.unavailable)}
+      unavailableTitle={shell.unavailable}
+    />
+  );
+  const items = navGroups(props.navigation ?? serviceNavigation, {
+    shell,
+    labels: props.labels,
+    routes,
+    hasRequests: Boolean(entities && navigationRequests(entities).length > 0),
+  }).flat();
   return (
     <Shell
       audience="service"
@@ -143,7 +239,9 @@ function ServiceWork(props: ServiceAppProps & { labels: ServiceAppLabels }) {
     >
       {props.recoveryNotice === undefined ? <RecoveryNotice /> : props.recoveryNotice}
       {props.pendingUploadsNotice === undefined ? <PendingUploadsNotice /> : props.pendingUploadsNotice}
-      <div key={route}>{page}</div>
+      <Suspense fallback={<Loading />}>
+        <div key={route}>{page}</div>
+      </Suspense>
     </Shell>
   );
 }

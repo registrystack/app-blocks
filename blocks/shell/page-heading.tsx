@@ -1,4 +1,10 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 /**
  * The heading a page focuses on arrival, so a hash-routed navigation reads
@@ -32,4 +38,18 @@ export function PageHeading({
       {action}
     </div>
   );
+}
+
+/**
+ * Whether a state shown in place of a page (loading, a failed read) is the
+ * heading one of the screen, because no page heading stands on it. Decided
+ * once, as the state arrives, from the document: a state shown beside a
+ * page's own heading stays a lower heading.
+ */
+export function useStandsAsPageTitle(): boolean {
+  const [stands, setStands] = useState(false);
+  useLayoutEffect(() => {
+    setStands(document.querySelector("h1") === null);
+  }, []);
+  return stands;
 }

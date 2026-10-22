@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useMemo,
   useRef,
   useState,
   useEffect,
@@ -24,7 +25,7 @@ import {
   type CommandState,
 } from "./index.js";
 import {
-  RetainedUploads,
+  retainedUploads,
   attachmentScope,
   attachmentTarget,
   pendingUploads,
@@ -35,37 +36,46 @@ import {
 import {
   useCommand,
   usePendingCommands,
+  useReadBackAfterRetry,
   useSettledElsewhere,
 } from "./command-hooks.js";
 export * from "./command-hooks.js";
+export * from "./document-read.js";
 export * from "./review-hooks.js";
-export * from "./work-item-hooks.js";
-import { recordTaskCommand } from "./record-commands.js";
+import { applyRequestCommand, recordTaskCommand } from "./record-commands.js";
 export {
-  applyTask,
+  applyRequestCommand,
+  applyVerdict,
   formValues,
   recordKeys,
   recordTask,
   recordTaskCommand,
   type RecordCommandInput,
 } from "./record-commands.js";
-export * from "./record-hooks.js";
 export * from "./recovery-hooks.js";
 export * from "./casework-hooks.js";
 export * from "./staffing-hooks.js";
+export * from "./statistics-hooks.js";
 export * from "./remembered.js";
 export * from "./session-hooks.js";
+import {
+  chooseLanguage,
+  LanguageContext,
+  rememberedLanguage,
+} from "./language-hooks.js";
+export {
+  chooseLanguage,
+  rememberedLanguage,
+  useLanguage,
+  type LanguageChoice,
+} from "./language-hooks.js";
 import type {
   RecordQuery,
   RecordTask,
   RecordTaskResult,
   RecordView,
 } from "./model.js";
-import type {
-  AttachmentFile,
-  AuthenticatedSession,
-  CaseworkItemFilters,
-} from "./types.js";
+import type { AttachmentFile, AuthenticatedSession } from "./types.js";
 import { readDocument } from "./document.js";
 import { rereadsSince, type RereadStart } from "./poll-backoff.js";
 const HostContext = createContext<HostClient | null>(null);
@@ -91,11 +101,13 @@ export function AppProvider({
         },
       }),
   );
+  const [chosen, setChosen] = useState(rememberedLanguage);
   const [host] = useState(
     () =>
       new HostClient({
         mount,
         ...(transport ? { fetch: transport } : {}),
+        ...(chosen ? { language: chosen } : {}),
         onSessionExpired: () => {
           pendingCommands.forgetAuthority();
           queryClient.removeQueries({
@@ -109,9 +121,23 @@ export function AppProvider({
         },
       }),
   );
+  const language = useMemo(
+    () => ({
+      chosen,
+      choose: (next: string | undefined) => {
+        chooseLanguage(host, queryClient, next);
+        setChosen(next);
+      },
+    }),
+    [chosen, host, queryClient],
+  );
   return (
     <QueryClientProvider client={queryClient}>
-      <HostContext.Provider value={host}>{children}</HostContext.Provider>
+      <HostContext.Provider value={host}>
+        <LanguageContext.Provider value={language}>
+          {children}
+        </LanguageContext.Provider>
+      </HostContext.Provider>
     </QueryClientProvider>
   );
 }
@@ -141,6 +167,15 @@ export function AuthorityBoundary({
   // This component is keyed by scope by the consumer, unmounting all protected forms.
   useEffect(() => {
     host.setSession(session);
+    // Bytes kept by an earlier session cannot be read back; delete them, and do not wait.
+    // Where the browser has no CacheStorage nothing could have been kept.
+    if (globalThis.caches)
+      retainedUploads.discardOtherSessions(session.scope).catch((caught) => {
+        console.error(
+          "Files an earlier session kept for recovery were not deleted.",
+          caught,
+        );
+      });
     return () => {
       host.clear();
       client.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
@@ -199,6 +234,50 @@ export function useRecords(entity: string, filter: RecordQuery = {}) {
   );
 }
 /**
+ * What the session may start with no existing record: creates, requests and
+ * immediate actions, each an offered action. BReg still decides each call.
+ */
+export function useStarts({ enabled = true }: { enabled?: boolean } = {}) {
+  const host = useHost(),
+    session = useAuthority();
+  return useQuery({
+    queryKey: [session.scope, "starts"],
+    queryFn: async () => (await host.starts()).actions,
+    enabled,
+  });
+}
+/**
+ * Pages through one authorized record query. The first request carries the
+ * query and every continuation carries only BReg's opaque, query-bound cursor.
+ * Pages advance only when the caller asks `fetchNextPage`. At most five pages
+ * are retained, and `restart` resets this query to its authorized first page.
+ */
+export function useRecordPages(entity: string, filter: RecordQuery = {}) {
+  const host = useHost(),
+    session = useAuthority(),
+    client = useQueryClient();
+  const queryKey = [session.scope, "record-pages", entity, filter] as const;
+  const records = withRecordQueryRefusal(
+    useInfiniteQuery({
+      queryKey,
+      initialPageParam: undefined as string | undefined,
+      queryFn: ({ pageParam }) =>
+        host.records(entity, pageParam ? { cursor: pageParam } : filter),
+      getNextPageParam: (page) => page.nextCursor ?? undefined,
+      // A picker advances explicitly and retains only a small window. This
+      // prevents a long-running form from accumulating an entire catalogue.
+      maxPages: 5,
+    }),
+  );
+  return {
+    ...records,
+    advanced:
+      records.data?.pageParams.some((pageParam) => pageParam !== undefined) ??
+      false,
+    restart: () => client.resetQueries({ queryKey, exact: true }),
+  };
+}
+/**
  * One page of the same query over several entities, a read per entity in the order given,
  * each answering as `useRecords` does and sharing its cache. For a page whose entities come
  * from the model, where a hook per entity cannot be written out.
@@ -230,6 +309,32 @@ export function useRecordHistory(entity: string, id: string, enabled = true) {
   });
 }
 /**
+ * The values an offered action fills its inputs with from the records chosen
+ * for them, one result per request and in its order. A request with no record
+ * yet is not read. A value is read when the record is chosen and is never
+ * refreshed while the form is open, so what the form submits is what it showed.
+ */
+export function useActionInputValues(
+  actionRef: string,
+  requests: readonly { input: string; record: string | undefined }[],
+) {
+  const host = useHost(),
+    session = useAuthority();
+  return useQueries({
+    queries: requests.map(({ input, record }) => ({
+      queryKey: [session.scope, "action-input-value", actionRef, input, record],
+      queryFn: () => host.actionInputValue(actionRef, input, record!),
+      enabled: Boolean(record),
+      retry: false,
+      // Static, not Infinity: a confirmed write refreshes the session's reads,
+      // and only a static read is left out of that refresh.
+      staleTime: "static",
+      gcTime: 0,
+      refetchOnWindowFocus: false,
+    })),
+  });
+}
+/**
  * One record with the actions the session may take on it. A page waiting on a change that
  * reaches the registry asynchronously passes `pollEvery`, which names the milliseconds to
  * wait before reading the held view again, or false once it has what it waits for. It also
@@ -251,7 +356,8 @@ export function useRecord(
   const record = useQuery({
     queryKey: [session.scope, "record", entity, id, lang ?? ""],
     queryFn: () => host.record(entity, id, lang),
-    enabled: Boolean(id),
+    // A read with no entity or no id names no record, so none is sent.
+    enabled: Boolean(entity) && Boolean(id),
     refetchInterval: (query) => {
       const { data, dataUpdateCount } = query.state;
       if (!pollEvery) return false;
@@ -273,21 +379,32 @@ export function useRecord(
     refreshing: record.isFetching && !record.isLoading,
   };
 }
-export function useCaseworkItems(filters: CaseworkItemFilters = {}) {
-  const host = useHost(),
-    session = useAuthority();
-  return useQuery({
-    queryKey: [session.scope, "casework-items", filters],
-    queryFn: () => host.caseworkItems(filters),
-  });
-}
-export function useNextCaseworkItem(filters: { queue?: string } = {}) {
-  const host = useHost(),
-    session = useAuthority();
-  return useQuery({
-    queryKey: [session.scope, "casework-next", filters],
-    queryFn: () => host.nextCaseworkItem(filters),
-  });
+
+/**
+ * A lookup of one record by what a person holds. The answer is kept by the caller; a
+ * failure is kept in `error`, and a lookup is never resent on its own.
+ */
+export function useRecordLookup(entity: string) {
+  const host = useHost();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  /** The matched record, or null when nothing was found. */
+  async function lookup(
+    selector: string,
+    values: Record<string, string>,
+  ): Promise<RecordView | null> {
+    setPending(true);
+    setError(null);
+    try {
+      return await host.lookupRecord(entity, selector, values);
+    } catch (caught) {
+      setError(caught);
+      return null;
+    } finally {
+      setPending(false);
+    }
+  }
+  return { lookup, pending, error };
 }
 export function useCaseworkDirectory() {
   const host = useHost(),
@@ -295,51 +412,6 @@ export function useCaseworkDirectory() {
   return useQuery({
     queryKey: [session.scope, "casework-directory"],
     queryFn: () => host.caseworkDirectory(),
-  });
-}
-export function useCaseworkItem(id: string) {
-  const host = useHost(),
-    session = useAuthority();
-  return useQuery({
-    queryKey: [session.scope, "casework-item", id],
-    queryFn: () => host.caseworkItem(id),
-    refetchInterval: (query) =>
-      query.state.data?.state === "synchronizing" ? 1_000 : false,
-  });
-}
-export function useCaseworkDraft(id: string) {
-  const host = useHost(),
-    session = useAuthority();
-  return useQuery({
-    queryKey: [session.scope, "casework-draft", id],
-    queryFn: () => host.caseworkDraft(id),
-  });
-}
-export function useCaseworkHistory(id: string) {
-  const host = useHost(),
-    session = useAuthority();
-  const history = useInfiniteQuery({
-    queryKey: [session.scope, "casework-history", id],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => host.caseworkHistory(id, pageParam),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-  });
-  const continuationError = history.isFetchNextPageError ? history.error : null;
-  return {
-    ...history,
-    data: history.data?.pages.flatMap((page) => page.items),
-    error: continuationError ? null : history.error,
-    continuationError,
-    firstPageStatus: history.data?.pages[0]?.status,
-    pageStatus: history.data?.pages.at(-1)?.status,
-  };
-}
-export function useCaseworkHoldings(cursor?: string) {
-  const host = useHost(),
-    session = useAuthority();
-  return useQuery({
-    queryKey: [session.scope, "casework-holdings", cursor ?? ""],
-    queryFn: () => host.caseworkHoldings(cursor),
   });
 }
 export interface PendingReference {
@@ -417,7 +489,6 @@ export function useDocumentBytes() {
   return (href: string, file: AttachmentFile, signal: AbortSignal) =>
     readDocument(window.location.origin, href, file, signal);
 }
-const retainedUploads = new RetainedUploads();
 const recordAttachmentUpload = recordAttachmentUploadCommand(
   retainedUploads,
   pendingCommands,
@@ -572,6 +643,37 @@ export function useRecordTask() {
     submit: async (task: RecordTask) => settledValue(await command.run(task)),
     retry: async () => settledValue(await command.retry()),
     reset: command.dismiss,
+  };
+}
+
+/**
+ * The writes on one request's own page. An apply is a command on the request, so one left
+ * unresolved is restored after a reload, locks the request until it settles, and is read
+ * back when its exact resend is no longer available. Any other task is its own attempt,
+ * as `useRecordTask` sends it. The page reads whichever of the two is in charge.
+ */
+export function useRequestWrite(entity: string, id: string) {
+  const other = useCommand(recordTaskCommand);
+  const apply = useCommand(applyRequestCommand, { entity, id });
+  useSettledElsewhere(apply.state, applyRequestCommand.scope, apply.dismiss);
+  const retryApply = useReadBackAfterRetry(apply);
+  const applying = apply.state.state !== "idle";
+  const command = applying ? apply : other;
+  return {
+    ...recordTaskView(command.state),
+    submit: async (task: RecordTask) =>
+      settledValue(
+        await (task.type === "lifecycle" && task.action === "apply"
+          ? apply
+          : other
+        ).run(task),
+      ),
+    retry: async () =>
+      settledValue(await (applying ? retryApply() : other.retry())),
+    reset: () => {
+      apply.dismiss();
+      other.dismiss();
+    },
   };
 }
 

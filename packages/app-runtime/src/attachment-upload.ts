@@ -65,7 +65,10 @@ export function uploadTarget(
  * reads them back.
  */
 export class RetainedUploads {
-  private readonly memory = new Map<string, AttachmentUpload>();
+  private readonly memory = new Map<
+    string,
+    { authority: string; upload: AttachmentUpload }
+  >();
   constructor(
     private readonly open: () => Promise<Cache> = () => caches.open(cacheName),
     private readonly origin: string = globalThis.location?.origin ?? "",
@@ -92,10 +95,10 @@ export class RetainedUploads {
         },
       }),
     );
-    this.memory.set(
-      this.memoryKey(authority, target, attemptId, entity),
+    this.memory.set(this.memoryKey(authority, target, attemptId, entity), {
+      authority,
       upload,
-    );
+    });
   }
   async recover(
     authority: string,
@@ -106,7 +109,7 @@ export class RetainedUploads {
     const held = this.memory.get(
       this.memoryKey(authority, target, attemptId, entity),
     );
-    if (held) return held;
+    if (held) return held.upload;
     const parts = parseAttachmentTarget(target);
     if (!parts) return null;
     const cache = await this.open();
@@ -131,6 +134,29 @@ export class RetainedUploads {
       if (key.startsWith(prefix)) this.memory.delete(key);
     const cache = await this.open();
     await cache.delete(this.key(authority, target, entity));
+  }
+
+  /**
+   * Deletes what a session other than `authority` kept, and what has expired. A session's
+   * scope is fresh for each sign-in, so nothing kept under another scope can be read back.
+   */
+  async discardOtherSessions(authority: string): Promise<void> {
+    for (const [key, held] of this.memory)
+      if (held.authority !== authority) this.memory.delete(key);
+    const cache = await this.open();
+    await this.purge(cache);
+    await Promise.all(
+      (await cache.keys())
+        .filter(
+          (request) =>
+            new URL(request.url).searchParams.get("scope") !== authority,
+        )
+        .map((request) => cache.delete(request)),
+    );
+  }
+  /** Drops the file Blobs held in memory; the Cache API is untouched. */
+  forgetHeld(): void {
+    this.memory.clear();
   }
 
   private key(authority: string, target: string, entity?: string) {
@@ -162,8 +188,41 @@ export class RetainedUploads {
   }
 }
 
+/** The instance the runtime keeps and reads uploads through. */
+export const retainedUploads = new RetainedUploads();
+
+/**
+ * Deletes every retained upload from the browser, for a person who signs out on purpose.
+ * Every entry goes, whichever session kept it, and so do the file bytes held in memory: a
+ * shared computer must not hold the next visitor's reach to a document. A session that
+ * ends some other way leaves its entries until the next signed-in page deletes them
+ * (`discardOtherSessions`). A delete that fails does not stop the others, and is reported once all have been tried. Where the
+ * browser has no CacheStorage nothing could have been kept.
+ */
+export async function clearRetainedUploads(
+  storage: CacheStorage | undefined = globalThis.caches,
+  uploads: RetainedUploads = retainedUploads,
+): Promise<void> {
+  uploads.forgetHeld();
+  if (!storage) return;
+  try {
+    const cache = await storage.open(cacheName);
+    const results = await Promise.allSettled(
+      (await cache.keys()).map((request) => cache.delete(request)),
+    );
+    if (results.some((result) => result.status === "rejected"))
+      throw new Error("An entry could not be deleted.");
+  } catch {
+    throw localRefusal(
+      0,
+      "attachment.not-cleared",
+      "You are signed out, but this browser could not remove a file it kept for recovery. Clear this site's data in the browser settings.",
+    );
+  }
+}
+
 function localRefusal(status: number, code: string, message: string) {
-  return new HostError(status, { code, message });
+  return new HostError(status, { code, message }, true);
 }
 
 /**

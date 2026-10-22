@@ -15,13 +15,21 @@ import {
   useAuthority,
   usePrefill,
   useRecord,
+  useStarts,
 } from "@registrystack/app-runtime/react";
 import { Button } from "@/components/ui/button";
-import { useBlockContent } from "@/blocks/lib/content";
-import { fill } from "@/blocks/lib/format";
+import { useBlockContent, useLocale } from "@/blocks/lib/content";
+import { fill, inSentence } from "@/blocks/lib/format";
 import { FieldControl } from "@/blocks/fields/field-control";
 import { FieldValue } from "@/blocks/fields/field-value";
+import { ChosenReferencesProvider } from "@/blocks/fields/reference-value";
+import { ValueScope } from "@/blocks/fields/group-field";
+import {
+  ConflictComparison,
+  conflictRows,
+} from "@/blocks/record/conflict-comparison";
 import { ErrorSummary } from "@/blocks/record/record-form";
+import { HolderSteps } from "@/blocks/request/holder-steps";
 import { AnswerList } from "@/blocks/request/request-form";
 import { VerifiedPrefillSection } from "@/blocks/request/verified-prefill";
 import { BackLink } from "@/blocks/shell/back-link";
@@ -29,13 +37,20 @@ import { Loading } from "@/blocks/shell/loading";
 import { ErrorPanel } from "@/blocks/shell/error-panel";
 import { PageHeading } from "@/blocks/shell/page-heading";
 import { navigate, splitRoute, useRoute } from "@/blocks/shell/routing";
-import { usePagesContent } from "@/blocks/pages/pages-content";
+import { createWords, usePagesContent } from "@/blocks/pages/pages-content";
+import { documentsRoute, reviewRoute } from "@/blocks/pages/holder-step-routes";
 import { useRegisterRoutes } from "@/blocks/pages/register-routes";
+import { startsPath } from "@/blocks/pages/start-places";
+import {
+  useFormAnswers,
+  useOpenedAction,
+} from "@/blocks/pages/write-form-core";
 import { TaskFeedback } from "@/blocks/pages/task-feedback";
 import {
   readableTarget,
   recordPath,
   recordTitle,
+  requestRoute,
   routedRequest,
   sameAnswer,
   useRegister,
@@ -55,22 +70,30 @@ import {
 export type ChangeRequestTask = RecordTaskState<RecordTask>;
 
 /**
- * A request to change one register record: a create from the record the
- * request changes, or the edit of a draft the session may still change. The
- * fields, their words and what the request writes come from the model,
- * never from an entity or field id in this file.
+ * A request to the register: a create from the record the request
+ * changes, a create from the start place, or the edit of a draft the
+ * session may still change. A create from the start place is a request that
+ * only creates, or one whose record is picked on its form. The fields, their
+ * words and what the request writes come from the model, never from an
+ * entity or field id in this file.
  */
 export function ChangeRequestFormPage({
   recordId,
   requestId,
   useTask,
+  onDirtyChange,
 }: {
-  /** The record this request changes; given when starting a new request. */
+  /**
+   * The record this request changes; given when starting a new request from
+   * that record. With neither id, the request is started from the start place.
+   */
   recordId?: string;
   /** The draft being edited; given when opening a saved one. */
   requestId?: string;
   /** The write this page submits; a page instantiates it over its own host command. */
   useTask: () => ChangeRequestTask;
+  /** Let the containing app protect unsaved answers when the user leaves this page. */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const register = useRegister();
   const { query } = splitRoute(useRoute());
@@ -90,59 +113,73 @@ export function ChangeRequestFormPage({
       request={request}
       id={requestId}
       useTask={useTask}
+      onDirtyChange={onDirtyChange}
     />
   ) : (
     <NewRequestForm
       entities={entities}
       request={request}
-      id={recordId!}
+      id={recordId}
       useTask={useTask}
+      onDirtyChange={onDirtyChange}
     />
   );
 }
 
 /**
- * The action a write form opened with, for as long as the form stays open.
- * The reread after a confirmed write may stop offering it (the request now
- * exists), and the form's outcome must outlive that.
+ * A new request: offered among the actions of the record it changes, or,
+ * with no record, among the starts, where the host leaves any record it
+ * changes to be picked on the form.
  */
-function useOpenedAction(action: RecordActionReference | undefined) {
-  const opened = useRef(action);
-  if (action) opened.current = action;
-  return opened.current;
-}
-
 function NewRequestForm({
   entities,
   request,
   id,
   useTask,
+  onDirtyChange,
 }: {
   entities: RegisterEntities;
   request: EntityModel;
-  id: string;
+  /** The record the request changes; absent for a request started from the start place. */
+  id?: string;
   useTask: () => ChangeRequestTask;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
-  const record = recordOfRequest(entities, request);
-  const query = useRecord(record.id, id);
+  const record = recordOfRequest(
+    entities,
+    request,
+    request.request?.entry?.entity,
+  );
+  const query = useRecord(record.id, id ?? "");
+  const starts = useStarts({ enabled: id === undefined });
+  const offered = id === undefined ? starts.data : query.data?.actions;
   const action = useOpenedAction(
-    query.data?.actions.find(
+    offered?.find(
       (item) => item.name === "create" && item.entity === request.id,
     ),
   );
-  if (query.isPending) return <Loading />;
-  if (!query.data || query.error) return <ErrorPanel error={query.error} />;
+  if (id === undefined ? starts.isPending : query.isPending) return <Loading />;
+  if (id === undefined && !starts.data)
+    return (
+      <ErrorPanel error={starts.error} retry={() => void starts.refetch()} />
+    );
+  if (id !== undefined && (!query.data || query.error))
+    return <ErrorPanel error={query.error} />;
   if (!action) return <UnavailableWrite />;
+  // Records picked on the form keep their titles for the check step, where the
+  // picker is gone and the session may list the record but not open it.
   return (
-    <RequestForm
-      key={query.data.id}
-      entities={entities}
-      record={record}
-      request={request}
-      action={action}
-      target={query.data}
-      useTask={useTask}
-    />
+    <ChosenReferencesProvider key={query.data?.id ?? request.id}>
+      <RequestForm
+        entities={entities}
+        record={record}
+        request={request}
+        action={action}
+        target={query.data}
+        useTask={useTask}
+        onDirtyChange={onDirtyChange}
+      />
+    </ChosenReferencesProvider>
   );
 }
 
@@ -151,11 +188,13 @@ function DraftRequestForm({
   request,
   id,
   useTask,
+  onDirtyChange,
 }: {
   entities: RegisterEntities;
   request: EntityModel;
   id: string;
   useTask: () => ChangeRequestTask;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const pages = usePagesContent(),
     session = useAuthority(),
@@ -165,9 +204,7 @@ function DraftRequestForm({
     return (
       <ErrorPanel
         error={query.error}
-        unavailableTitle={
-          session.role === "holder" ? pages.requestUnavailable : undefined
-        }
+        unavailableTitle={session.holder ? pages.requestUnavailable : undefined}
       />
     );
   return (
@@ -175,7 +212,9 @@ function DraftRequestForm({
       entities={entities}
       request={request}
       draft={query.data}
+      reread={() => void query.refetch()}
       useTask={useTask}
+      onDirtyChange={onDirtyChange}
     />
   );
 }
@@ -185,17 +224,22 @@ function DraftWithTarget({
   entities,
   request,
   draft,
+  reread,
   useTask,
+  onDirtyChange,
 }: {
   entities: RegisterEntities;
   request: EntityModel;
   draft: RecordView;
+  /** Reads the draft again, for the comparison a stale refusal shows. */
+  reread: () => void;
   useTask: () => ChangeRequestTask;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const record = recordOfRequest(
     entities,
     request,
-    draft.request?.target?.entity,
+    (draft.request?.entry ?? draft.request?.target)?.entity,
   );
   const query = useRecord(
     record.id,
@@ -215,7 +259,9 @@ function DraftWithTarget({
       action={action}
       target={query.data}
       draft={draft}
+      reread={reread}
       useTask={useTask}
+      onDirtyChange={onDirtyChange}
     />
   );
 }
@@ -252,7 +298,9 @@ function RequestForm({
   action,
   target,
   draft,
+  reread,
   useTask,
+  onDirtyChange,
 }: {
   entities: RegisterEntities;
   /** The record entity the request changes. */
@@ -263,34 +311,72 @@ function RequestForm({
   target?: RecordView;
   /** The draft being edited; absent for a create. */
   draft?: RecordView;
+  /** Reads the draft again; given with a draft. */
+  reread?: () => void;
   useTask: () => ChangeRequestTask;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const pages = usePagesContent(),
     block = useBlockContent(),
+    locale = useLocale(),
     routes = useRegisterRoutes(),
     session = useAuthority(),
     task = useTask();
   const fields = (action.fields ?? []).filter((field) => !field.readOnly);
   const written = writtenFields({ record, request }, fields);
+  const comparesExisting = written.length > 0;
   const writtenIds = written.map((item) => item.field.id);
   const others = fields.filter((field) => !writtenIds.includes(field.id));
-  const [values, setValues] = useState<Record<string, JsonValue>>(() =>
-    formValues(
-      fields,
-      draft
-        ? draft.values
-        : Object.fromEntries(
-            written.map((item) => [
-              item.field.id,
-              target?.values[item.target.id],
-            ]),
-          ),
-    ),
-  );
+  const { values, errors, errorFocusRequest, setValue, showErrors } =
+    useFormAnswers(() =>
+      formValues(
+        fields,
+        draft
+          ? draft.values
+          : Object.fromEntries(
+              written.map((item) => [
+                item.field.id,
+                target?.values[item.target.id],
+              ]),
+            ),
+      ),
+    );
   const prefill = usePrefill(action.ref);
   const { evidenceRef, accepted: acceptedPrefill } = prefill;
-  const [errors, setErrors] = useState<Record<string, string>>({}),
-    [checking, setChecking] = useState(false);
+  const initialValues = useRef(values);
+  // The revision the last save was sent against, so a refusal's comparison
+  // waits for the reread that carries what the registry holds now.
+  const sentRevision = useRef<string | undefined>(undefined);
+  const [resolution, setResolution] = useState<"kept" | "taken" | null>(null);
+  const resolutionNote = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (resolution) resolutionNote.current?.focus();
+  }, [resolution]);
+  // A save refused as stale reads the draft once, for what it holds now.
+  useEffect(() => {
+    if (task.staleConflict) reread?.();
+  }, [task.staleConflict]);
+  const conflict =
+    draft !== undefined &&
+    task.staleConflict === true &&
+    draft.revision !== sentRevision.current;
+  const latestValues = draft && formValues(fields, draft.values);
+  const dirty =
+    task.result?.outcome !== "confirmed" &&
+    (fields.some(
+      (field) => !sameAnswer(values[field.id], initialValues.current[field.id]),
+    ) ||
+      evidenceRef !== undefined);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+  useEffect(
+    () => () => {
+      onDirtyChange?.(false);
+    },
+    [onDirtyChange],
+  );
+  const [checking, setChecking] = useState(false);
   const returnToField = useRef<string | null>(null);
   useEffect(() => {
     if (checking || !returnToField.current) return;
@@ -313,14 +399,6 @@ function RequestForm({
     returnToField.current = field;
     setChecking(false);
   }
-  function setValue(field: FieldModel, value: JsonValue | undefined) {
-    setValues((previous) => {
-      const next = { ...previous };
-      if (value === undefined) delete next[field.id];
-      else next[field.id] = value;
-      return next;
-    });
-  }
   const current = (item: WrittenField) =>
     currentValue(item.target, target, draft?.request);
   // The verified answer this form holds: one accepted now, or one the draft retained.
@@ -341,7 +419,7 @@ function RequestForm({
       setValue(field, proposal.value);
   }
   function validate() {
-    const next = valueErrors(fields, values, request.rules, block);
+    const next = valueErrors(fields, values, block, locale);
     const first = written[0];
     if (
       first &&
@@ -351,11 +429,24 @@ function RequestForm({
       })
     )
       next[first.field.id] = pages.unchangedError;
-    setErrors(next);
-    return !Object.keys(next).length;
+    return showErrors(next);
+  }
+  function keepMine() {
+    if (latestValues) initialValues.current = latestValues;
+    task.reset?.();
+    setResolution("kept");
+  }
+  function takeLatest() {
+    if (!latestValues) return;
+    for (const field of fields) setValue(field, latestValues[field.id]);
+    initialValues.current = latestValues;
+    task.reset?.();
+    setResolution("taken");
   }
   async function save() {
     if (!validate()) return;
+    sentRevision.current = draft?.revision;
+    setResolution(null);
     await task.submit(
       draft
         ? recordTask(
@@ -371,11 +462,18 @@ function RequestForm({
     );
   }
   const locked = task.locked;
+  // The steps are a holder's own; staff keep the form on its own.
+  const takesDocuments = Boolean(request.operations.attachments?.length);
+  // A create with no record it changes was opened from the start place. It
+  // has no recorded values to show or compare against, and the host serves
+  // no verified prefill for a start.
+  const started = !draft && !target;
   const back =
     (draft
       ? recordPath(routes, entities, draft.entity, draft.id)
-      : target && recordPath(routes, entities, target.entity, target.id)) ??
-    "/";
+      : target
+        ? recordPath(routes, entities, target.entity, target.id)
+        : startsPath) ?? "/";
   const problems = task.fieldErrors;
   function input(field: FieldModel) {
     return (
@@ -392,68 +490,108 @@ function RequestForm({
   return (
     <>
       <BackLink href={back}>{pages.back}</BackLink>
+      {session.holder && (
+        <HolderSteps current="answers" documents={takesDocuments} />
+      )}
       <PageHeading
         eyebrow={
-          (target && recordTitle(record, target)) ??
-          (draft && recordTitle(request, draft))
+          (target && recordTitle(record, target, locale)) ??
+          (draft && recordTitle(request, draft, locale))
         }
-        title={checking ? pages.checkTitle : pages.changeFormTitle}
+        title={
+          checking
+            ? pages.checkTitle
+            : createWords(
+                pages,
+                "changeFormTitle",
+                action.label ?? request.label,
+                request.label,
+                locale,
+              )
+        }
         description={
-          checking ? pages.checkDescription : pages.changeFormDescription
+          checking
+            ? pages.checkDescription
+            : createWords(
+                pages,
+                "changeFormDescription",
+                request.createDescription,
+                request.label,
+                locale,
+              )
         }
       />
       <div className="task-layout">
         <div className="card form-card">
+          {resolution && (
+            <p
+              ref={resolutionNote}
+              role="status"
+              tabIndex={-1}
+              className="muted"
+            >
+              {resolution === "kept" ? block.conflictKept : block.conflictTaken}
+            </p>
+          )}
           <ErrorSummary
             key={refusals}
             errors={{ ...errors, ...problems }}
             fields={fields}
+            focusRequest={errorFocusRequest}
           />
           {checking ? (
             <>
-              <div className="comparison">
-                <section>
-                  <h2 className="eyebrow">{pages.before}</h2>
-                  {written.map((item) => {
-                    const known = current(item);
-                    return (
-                      <Fragment key={item.field.id}>
-                        <h3>{item.target.label}</h3>
-                        {known === undefined ? (
-                          <p>{pages.originalValueUnavailable}</p>
-                        ) : (
-                          <ValueBlock field={item.target} value={known} />
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </section>
-                <section>
-                  <h2 className="eyebrow">{pages.after}</h2>
-                  {written.map((item) => (
-                    <Fragment key={item.field.id}>
-                      <h3>{item.target.label}</h3>
-                      <ValueBlock
-                        field={item.target}
-                        value={values[item.field.id]}
-                      />
-                      {canChange && (
-                        <Button
-                          variant="ghost"
-                          className="change-answer"
-                          onClick={() => changeAnswer(item.field.id)}
-                        >
-                          {fill(block.changeAnswer, {
-                            field: item.field.label.toLowerCase(),
-                          })}
-                        </Button>
-                      )}
-                    </Fragment>
-                  ))}
-                </section>
-              </div>
+              {!started && comparesExisting && (
+                <div className="comparison">
+                  <section>
+                    <ValueScope label={pages.scopeReviewBefore}>
+                      <h2 className="eyebrow">{pages.before}</h2>
+                      {written.map((item) => {
+                        const known = current(item);
+                        return (
+                          <Fragment key={item.field.id}>
+                            <h3>{item.target.label}</h3>
+                            {known === undefined ? (
+                              <p>{pages.originalValueUnavailable}</p>
+                            ) : (
+                              <ValueBlock field={item.target} value={known} />
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </ValueScope>
+                  </section>
+                  <section>
+                    <ValueScope label={pages.scopeReviewAfter}>
+                      <h2 className="eyebrow">{pages.after}</h2>
+                      {written.map((item) => (
+                        <Fragment key={item.field.id}>
+                          <h3>{item.target.label}</h3>
+                          <ValueBlock
+                            field={item.target}
+                            value={values[item.field.id]}
+                          />
+                          {canChange && (
+                            <Button
+                              variant="ghost"
+                              className="change-answer"
+                              onClick={() => changeAnswer(item.field.id)}
+                            >
+                              {fill(
+                                block.changeAnswer,
+                                { field: inSentence(item.field.label, locale) },
+                                locale,
+                              )}
+                            </Button>
+                          )}
+                        </Fragment>
+                      ))}
+                    </ValueScope>
+                  </section>
+                </div>
+              )}
               <AnswerList
-                items={others.map((field) => ({
+                items={(started ? fields : others).map((field) => ({
                   key: field.id,
                   label: field.label,
                   value:
@@ -467,8 +605,14 @@ function RequestForm({
                     <>
                       {verified && field.id === verifiedField?.id && (
                         <p className="muted">
-                          {block.prefillVerified}:{" "}
-                          {verified.value ? block.yes : block.no}.{" "}
+                          {fill(
+                            block.labelledSentence,
+                            {
+                              label: block.prefillVerified,
+                              value: verified.value ? block.yes : block.no,
+                            },
+                            locale,
+                          )}{" "}
                           {diverged(field) ? block.prefillChanged : ""}
                         </p>
                       )}
@@ -478,9 +622,11 @@ function RequestForm({
                           className="change-answer"
                           onClick={() => changeAnswer(field.id)}
                         >
-                          {fill(block.changeAnswer, {
-                            field: field.label.toLowerCase(),
-                          })}
+                          {fill(
+                            block.changeAnswer,
+                            { field: inSentence(field.label, locale) },
+                            locale,
+                          )}
                         </Button>
                       )}
                     </>
@@ -510,7 +656,8 @@ function RequestForm({
               }}
             >
               <fieldset disabled={locked}>
-                {session.role === "holder" &&
+                {!started &&
+                  session.holder &&
                   session.capabilities.verifiedPrefill && (
                     <VerifiedPrefillSection
                       heading={block.getVerifiedInformation}
@@ -532,6 +679,7 @@ function RequestForm({
                       }
                     />
                   )}
+                <p className="muted">{pages.required}</p>
                 {fields.map(input)}
                 <div className="actions">
                   <Button type="submit">
@@ -548,31 +696,59 @@ function RequestForm({
               </fieldset>
             </form>
           )}
-          <TaskFeedback
-            task={task}
-            onConfirmed={(id) => {
-              const path = recordPath(routes, entities, request.id, id);
-              if (path) navigate(path);
-            }}
-          />
+          {conflict && latestValues ? (
+            <ConflictComparison
+              rows={conflictRows(
+                fields,
+                initialValues.current,
+                values,
+                latestValues,
+              )}
+              onKeepMine={keepMine}
+              onTakeLatest={takeLatest}
+            />
+          ) : (
+            <TaskFeedback
+              task={task}
+              reconcileHref={`#${requestRoute(entities, routes.requests, request.id)}`}
+              confirmedLabel={
+                session.holder ? pages.continueAfterWrite : undefined
+              }
+              onConfirmed={(id) => {
+                const path = session.holder
+                  ? (takesDocuments ? documentsRoute : reviewRoute)(
+                      routes,
+                      entities,
+                      request.id,
+                      id,
+                    )
+                  : recordPath(routes, entities, request.id, id);
+                if (path) navigate(path);
+              }}
+            />
+          )}
         </div>
-        <aside className="card context-card" aria-label={pages.before}>
-          <p className="eyebrow">{pages.before}</p>
-          {written.map((item) => {
-            const known = current(item);
-            return (
-              <Fragment key={item.field.id}>
-                <h2>{item.target.label}</h2>
-                {known === undefined ? (
-                  <p>{pages.originalValueUnavailable}</p>
-                ) : (
-                  <ValueBlock field={item.target} value={known} />
-                )}
-              </Fragment>
-            );
-          })}
-          <p className="muted">{pages.recordNotice}</p>
-        </aside>
+        {!started && comparesExisting && (
+          <aside className="card context-card" aria-label={pages.before}>
+            <ValueScope label={pages.scopeBesideForm}>
+              <p className="eyebrow">{pages.before}</p>
+              {written.map((item) => {
+                const known = current(item);
+                return (
+                  <Fragment key={item.field.id}>
+                    <h2>{item.target.label}</h2>
+                    {known === undefined ? (
+                      <p>{pages.originalValueUnavailable}</p>
+                    ) : (
+                      <ValueBlock field={item.target} value={known} />
+                    )}
+                  </Fragment>
+                );
+              })}
+            </ValueScope>
+            <p className="muted">{pages.recordNotice}</p>
+          </aside>
+        )}
       </div>
     </>
   );

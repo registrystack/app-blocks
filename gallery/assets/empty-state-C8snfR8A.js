@@ -1,0 +1,1 @@
+import{Wt as e}from"./loading-iat2pJOC.js";import{t}from"./library-lKZtuNv6.js";var n=e();function r({title:e,children:r}){return(0,n.jsxs)(`div`,{className:`empty-state`,children:[(0,n.jsx)(t,{"aria-hidden":`true`,size:28}),(0,n.jsx)(`h2`,{children:e}),(0,n.jsx)(`p`,{children:r})]})}export{r as t};

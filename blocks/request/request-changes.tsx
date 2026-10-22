@@ -7,9 +7,10 @@ import type {
   RequestView,
 } from "@registrystack/app-runtime";
 import { Button } from "@/components/ui/button";
-import { useBlockContent } from "@/blocks/lib/content";
-import { fill } from "@/blocks/lib/format";
+import { useBlockContent, useLocale } from "@/blocks/lib/content";
+import { fill, inSentence } from "@/blocks/lib/format";
 import { FieldValue } from "@/blocks/fields/field-value";
+import { ValueScope } from "@/blocks/fields/group-field";
 
 export interface ChangeRow {
   key: string;
@@ -35,6 +36,7 @@ export function ChangeTable({
   children?: ReactNode;
 }) {
   const c = useBlockContent();
+  const locale = useLocale();
   const tableId = useId();
   const [showUnchangedRows, setShowUnchangedRows] = useState(true);
   const unchangedCount = rows.filter(
@@ -78,13 +80,13 @@ export function ChangeTable({
                   )}
                 </td>
                 <td data-label={c.currentColumn} headers={`${tableId}-current`}>
-                  {row.current}
+                  <ValueScope label={c.currentColumn}>{row.current}</ValueScope>
                 </td>
                 <td
                   data-label={c.proposedColumn}
                   headers={`${tableId}-proposed`}
                 >
-                  {row.proposed}
+                  <ValueScope label={c.proposedColumn}>{row.proposed}</ValueScope>
                 </td>
               </tr>
             ))}
@@ -100,7 +102,7 @@ export function ChangeTable({
             >
               {showUnchangedRows
                 ? c.hideUnchanged
-                : fill(c.showUnchanged, { count: unchangedCount })}
+                : fill(c.showUnchanged, { count: unchangedCount }, locale)}
             </Button>
           )}
           {children}
@@ -240,6 +242,7 @@ export function ProposedChangesReview({
   afterLabel: string;
 }) {
   const c = useBlockContent();
+  const locale = useLocale();
   return (
     <div className="comparison">
       <section>
@@ -247,7 +250,7 @@ export function ProposedChangesReview({
         {items.map((item) => (
           <Fragment key={item.key}>
             <h3>{item.label}</h3>
-            {item.before}
+            <ValueScope label={beforeLabel}>{item.before}</ValueScope>
           </Fragment>
         ))}
       </section>
@@ -256,14 +259,18 @@ export function ProposedChangesReview({
         {items.map((item) => (
           <Fragment key={item.key}>
             <h3>{item.label}</h3>
-            {item.after}
+            <ValueScope label={afterLabel}>{item.after}</ValueScope>
             {item.onChangeAnswer && (
               <Button
                 variant="ghost"
                 className="change-answer"
                 onClick={item.onChangeAnswer}
               >
-                {fill(c.changeAnswer, { field: item.label.toLowerCase() })}
+                {fill(
+                  c.changeAnswer,
+                  { field: inSentence(item.label, locale) },
+                  locale,
+                )}
               </Button>
             )}
           </Fragment>

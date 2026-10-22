@@ -10,6 +10,7 @@ import type { FieldModel, JsonValue } from "@registrystack/app-runtime";
 import {
   BooleanControl,
   ChoicesControl,
+  Crs84PointControl,
   DateControl,
   EnumControl,
   NumberControl,
@@ -77,6 +78,7 @@ export const defaultRenderers: FieldRenderers = {
   "json-value": { Value: JsonValueView },
   group: { Value: GroupValue, Control: GroupControl },
   structured: { Value: JsonValueView, Control: StructuredControl },
+  "crs84-point": { Value: JsonValueView, Control: Crs84PointControl },
 };
 
 /**
@@ -91,6 +93,7 @@ export function fieldKind(
     return field.widget;
   if (field.type === "group") return "group";
   if (field.type === "structured") return "structured";
+  if (field.type === "crs84-point") return "crs84-point";
   if (field.type === "object") return "json-value";
   if (field.type === "array")
     return field.options ? "multi-enum" : "json-value";

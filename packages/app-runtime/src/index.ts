@@ -1,13 +1,162 @@
-export * from "./poll-backoff.js";
-export * from "./casework-task-types.js";
-export * from "./review-types.js";
-export * from "./review-result.js";
-export * from "./review-subject.js";
-export * from "./model.js";
-export * from "./record-title.js";
-export * from "./schema-fields.js";
+export {
+  backOffInterval,
+  rereadsSince,
+} from "./poll-backoff.js";
+export type {
+  RereadStart,
+} from "./poll-backoff.js";
+export type {
+  CaseworkEvidenceRequesterContext,
+  CaseworkTaskApprovalResult,
+  CaseworkTaskBounds,
+  CaseworkTaskDispatchResult,
+  CaseworkTaskGrant,
+  CaseworkTaskGrantList,
+  CaseworkTaskPreview,
+  CaseworkTaskPreviewList,
+} from "./casework-task-types.js";
+export {
+  bregReviewSubjectSource,
+} from "./review-types.js";
+export type {
+  OwnReviewDecision,
+  OwnReviewDecisionFilters,
+  OwnReviewDecisionPage,
+  RequesterReviewNote,
+  RequesterReviewNotes,
+  ReviewAccountability,
+  ReviewAssignmentCommand,
+  ReviewClock,
+  ReviewCommandResult,
+  ReviewContext,
+  ReviewDecision,
+  ReviewDecisionCommand,
+  ReviewDecisionReceipt,
+  ReviewDraft,
+  ReviewDraftCommand,
+  ReviewDraftResult,
+  ReviewHistoryEntry,
+  ReviewHistoryPage,
+  ReviewHoldOperation,
+  ReviewJson,
+  ReviewNoteAudience,
+  ReviewNoteCommand,
+  ReviewOutcome,
+  ReviewPolicy,
+  ReviewPolicyList,
+  ReviewPolicyOutcome,
+  ReviewPolicyStage,
+  ReviewPolicySummary,
+  ReviewPublicReason,
+  ReviewQueueFilters,
+  ReviewReadBack,
+  ReviewSettlement,
+  ReviewSubject,
+  ReviewTask,
+  ReviewTaskDetail,
+  ReviewTaskLink,
+  ReviewTaskPage,
+  ReviewTaskStatus,
+  ReviewWrite,
+  SupervisoryReviewFilters,
+  SupervisoryReviewTask,
+  SupervisoryReviewTaskPage,
+} from "./review-types.js";
+export {
+  planReviewResult,
+  reviewResultMissing,
+  reviewResultValues,
+} from "./review-result.js";
+export type {
+  ReviewResultBlock,
+  ReviewResultField,
+  ReviewResultPlan,
+} from "./review-result.js";
+export {
+  reviewChangedRequestValues,
+  reviewShownValues,
+  reviewSubjectEntity,
+  reviewSubjectFromRegister,
+  reviewSubjectTarget,
+  reviewSubjectTitle,
+} from "./review-subject.js";
+export { reviewQueueColumns, reviewQueueFilters } from "./model.js";
+export type {
+  CaseworkModel,
+  ReviewQueueColumn,
+  ReviewQueueFilter,
+  ReviewQueueView,
+} from "./model.js";
+export type {
+  ActionUnavailability,
+  EntityModel,
+  FieldModel,
+  FieldOption,
+  FieldType,
+  HomeView,
+  JsonSchema,
+  JsonValue,
+  LookupModel,
+  RecordActionReference,
+  RecordHistory,
+  RecordPage,
+  RecordQuery,
+  RecordRevision,
+  RecordSubmission,
+  RecordTask,
+  RecordTaskResult,
+  RecordView,
+  RegistryModel,
+  RequestAction,
+  RequestModel,
+  RequestState,
+  RequestView,
+} from "./model.js";
+export {
+  entityTitle,
+  templateFields,
+} from "./record-title.js";
+export { displayDate } from "./display-date.js";
+export { relatedFields } from "./related-records.js";
+export type { RelatedField } from "./related-records.js";
+export { recordPreset } from "./record-preset.js";
+export {
+  crs84PointContract,
+  exactDecimal,
+  fieldFromSchema,
+  fieldsFromJsonSchema,
+  schemaObjectProperties,
+  validateValues,
+} from "./schema-fields.js";
+export type {
+  Crs84PointContract,
+  FieldSource,
+  FieldText,
+  ValueIssue,
+  ValueIssueCode,
+} from "./schema-fields.js";
+export type {
+  DashboardCell,
+  DashboardCellTarget,
+  DashboardCohortPage,
+  DashboardResponse,
+  DashboardView,
+  DashboardWidgetContext,
+  DashboardWidgetResult,
+  DashboardWidgetState,
+  DashboardWidgetType,
+  DashboardWidgetView,
+  StatisticStatus,
+} from "./statistics-types.js";
+import type {
+  DashboardCellTarget,
+  DashboardCohortPage,
+  DashboardResponse,
+  DashboardWidgetResult,
+} from "./statistics-types.js";
 import type {
   RecordHistory,
+  RecordActionReference,
   RecordPage,
   RecordQuery,
   RecordSubmission,
@@ -23,6 +172,8 @@ import type {
   CaseworkTaskDispatchResult,
 } from "./casework-task-types.js";
 import type {
+  OwnReviewDecisionFilters,
+  OwnReviewDecisionPage,
   ReviewAccountability,
   ReviewAssignmentCommand,
   ReviewClock,
@@ -35,15 +186,56 @@ import type {
   ReviewHistoryPage,
   ReviewHoldOperation,
   ReviewNoteCommand,
+  ReviewPolicyList,
   ReviewQueueFilters,
   ReviewReadBack,
+  ReviewTask,
   ReviewTaskDetail,
   ReviewTaskPage,
+  SupervisoryReviewFilters,
+  SupervisoryReviewTaskPage,
   ReviewWrite,
   RequesterReviewNotes,
 } from "./review-types.js";
-export * from "./types.js";
-export * from "./casework-staffing-types.js";
+export {
+  CASEWORK_PROBLEM_CODES,
+  CASEWORK_PROBLEM_STATUSES,
+  caseworkProblemStatus,
+  isCaseworkProblemCode,
+} from "./types.js";
+export type {
+  AttachmentFile,
+  AttachmentSlot,
+  AuthenticatedSession,
+  CaseworkDirectory,
+  CaseworkPageStatus,
+  CaseworkPrincipal,
+  CaseworkProblemCode,
+  CaseworkProfile,
+  CaseworkSetupInput,
+  CaseworkTeam,
+  ChangeRequestReview,
+  HostProblem,
+  Page,
+  Session,
+  VerifiedEvidenceDisplay,
+  VerifiedPrefill,
+} from "./types.js";
+export type {
+  CaseworkStaffingAbsence,
+  CaseworkStaffingAbsenceList,
+  CaseworkStaffingAbsenceResult,
+  CaseworkStaffingApplyCaseload,
+  CaseworkStaffingApplyResult,
+  CaseworkStaffingCaseloadPreview,
+  CaseworkStaffingCaseloadPreviewInput,
+  CaseworkStaffingCreateAbsence,
+  CaseworkStaffingDeleteAbsence,
+  CaseworkStaffingPrincipal,
+  CaseworkStaffingTargetPage,
+  CaseworkStaffingTargetQuery,
+  CaseworkStaffingUpdateAbsence,
+} from "./casework-staffing-types.js";
 import type {
   CaseworkStaffingTargetQuery,
   CaseworkStaffingTargetPage,
@@ -52,10 +244,8 @@ import type {
   CaseworkStaffingUpdateAbsence,
   CaseworkStaffingDeleteAbsence,
   CaseworkStaffingAbsenceResult,
-  CaseworkStaffingAssignCommand,
-  CaseworkStaffingAssignResult,
   CaseworkStaffingCaseloadPreviewInput,
-  CaseworkStaffingCaseloadPreviewPage,
+  CaseworkStaffingCaseloadPreview,
   CaseworkStaffingApplyCaseload,
   CaseworkStaffingApplyResult,
 } from "./casework-staffing-types.js";
@@ -63,29 +253,90 @@ import type {
   Session,
   VerifiedPrefill,
   HostProblem,
-  CaseworkWorkItem,
-  CaseworkWorkItemPage,
-  CaseworkItemFilters,
   CaseworkDirectory,
-  CaseworkDraft,
-  CaseworkHistoryPage,
-  CaseworkHoldings,
   CaseworkSetupInput,
-  CaseworkCommand,
-  CaseworkCommandResult,
 } from "./types.js";
 
 export { HostError, UnknownOutcome } from "./errors.js";
 import { HostError, UnknownOutcome } from "./errors.js";
-export * from "./commands.js";
-export * from "./problems.js";
-export * from "./prefill.js";
-export * from "./record-recovery.js";
-export * from "./document.js";
+export {
+  CommandMarkers,
+  classifyRefusal,
+  commandMarkerKey,
+  executeCommand,
+  executeProbe,
+  pendingCommands,
+  restoredOperation,
+} from "./commands.js";
+export type {
+  CommandMarker,
+  CommandPhase,
+  CommandState,
+  CommandTarget,
+  CommandViewer,
+  MarkerInput,
+  PendingCommand,
+  ProbeVerdict,
+  Refusal,
+  RefusalDecision,
+  RefusalKind,
+} from "./commands.js";
+export {
+  notAuthorized,
+  problemView,
+  queueFilterRefused,
+  recordQueryRefusal,
+  refusalDetail,
+  rereadsOnRefusal,
+  taskGrantsWithheld,
+  taskRefusal,
+  taskRevokeFailure,
+  unavailableError,
+} from "./problems.js";
+export type {
+  ProblemKind,
+  ProblemView,
+  RefusalDetail,
+  TaskRefusal,
+} from "./problems.js";
+export {
+  prefillFailure,
+  prefillRefusal,
+  prefillRemaining,
+  requestPrefill,
+} from "./prefill.js";
+export type {
+  PrefillFailure,
+} from "./prefill.js";
+export {
+  recoverRecordWrite,
+} from "./record-recovery.js";
+export type {
+  RecordRecoveryStep,
+} from "./record-recovery.js";
+export {
+  documentPreviewTypes,
+  readDocument,
+} from "./document.js";
+export { readBundledAsset } from "./bundled-asset.js";
+export {
+  applyLanguage,
+  formatLocale,
+  languageMemory,
+  languageName,
+  textDirection,
+} from "./language.js";
+export {
+  MessageSyntaxError,
+  formatMessage,
+  messageArguments,
+} from "./message-format.js";
 export interface HostClientOptions {
   mount?: string;
   fetch?: typeof fetch;
   onSessionExpired?: () => void;
+  /** The language the person chose, asked of every route; the browser's own when unset. */
+  language?: string;
 }
 function recordAttachmentPath(entity: string, id: string, slot: string) {
   return `/entities/${encodeURIComponent(entity)}/records/${encodeURIComponent(id)}/attachments/${encodeURIComponent(slot)}`;
@@ -95,9 +346,11 @@ export class HostClient {
   readonly mount: string;
   private readonly transport: typeof fetch;
   private csrfToken = "";
+  private language: string | undefined;
   private readonly pending = new Map<string, RecordSubmission>();
   constructor(private readonly options: HostClientOptions = {}) {
     this.mount = options.mount ?? "/api";
+    this.language = options.language;
     if (
       !this.mount.startsWith("/") ||
       this.mount.startsWith("//") ||
@@ -109,6 +362,14 @@ export class HostClient {
   }
   setSession(session: Session) {
     this.csrfToken = session.authenticated ? session.csrfToken : "";
+  }
+  /**
+   * Asks every later call in this language, sent as `Accept-Language`, so the
+   * host words its answer in the UI model's language nearest it. Unset, the
+   * browser's own preference reaches the host.
+   */
+  setLanguage(language: string | undefined) {
+    this.language = language;
   }
   clear() {
     this.pending.clear();
@@ -128,6 +389,7 @@ export class HostClient {
         signal: AbortSignal.timeout(timeout),
         headers: {
           Accept: "application/json",
+          ...(this.language ? { "Accept-Language": this.language } : {}),
           ...(init.body ? { "Content-Type": "application/json" } : {}),
           ...(init.method && init.method !== "GET"
             ? { "X-CSRF-Token": this.csrfToken }
@@ -137,20 +399,28 @@ export class HostClient {
       });
     } catch {
       if (attemptId) throw new UnknownOutcome(attemptId);
-      throw new HostError(0, {
-        code: "service.unavailable",
-        message: "The service is unavailable. Try again.",
-      });
+      throw new HostError(
+        0,
+        {
+          code: "service.unavailable",
+          message: "The service is unavailable. Try again.",
+        },
+        true,
+      );
     }
     let data: unknown;
     try {
       data = await response.json();
     } catch {
       if (attemptId) throw new UnknownOutcome(attemptId);
-      throw new HostError(response.status, {
-        code: "response.invalid",
-        message: "The service returned an unreadable response. Try again.",
-      });
+      throw new HostError(
+        response.status,
+        {
+          code: "response.invalid",
+          message: "The service returned an unreadable response. Try again.",
+        },
+        true,
+      );
     }
     if (!response.ok) {
       // An intermediary may emit JSON after the registry committed a write.
@@ -162,13 +432,18 @@ export class HostClient {
         this.options.onSessionExpired?.();
       }
       const body = data as Partial<HostProblem>;
-      throw new HostError(response.status, {
-        code: body.code ?? "service.unavailable",
-        message: body.message ?? "The service could not complete this request.",
-        fieldErrors: body.fieldErrors,
-        supportReference: body.supportReference,
-        ...(body.worded === true ? { worded: true } : {}),
-      });
+      throw new HostError(
+        response.status,
+        {
+          code: body.code ?? "service.unavailable",
+          message:
+            body.message ?? "The service could not complete this request.",
+          fieldErrors: body.fieldErrors,
+          supportReference: body.supportReference,
+          ...(body.worded === true ? { worded: true } : {}),
+        },
+        typeof body.code !== "string" || typeof body.message !== "string",
+      );
     }
     return data as T;
   }
@@ -196,10 +471,69 @@ export class HostClient {
       })}`,
     );
   }
+  /** What the session may start with no existing record, each as an action it may take. */
+  starts() {
+    return this.request<{ actions: RecordActionReference[] }>("/starts");
+  }
+  /** The session's dashboard, or none where the register has no dashboard. */
+  dashboard(lang?: string) {
+    return this.request<DashboardResponse>(`/dashboard${query({ lang })}`);
+  }
+  /** One widget's figures for a period the dashboard offers. */
+  dashboardWidget(id: string, period?: string, lang?: string) {
+    return this.request<DashboardWidgetResult>(
+      `/dashboard/${encodeURIComponent(id)}${query({ period, lang })}`,
+    );
+  }
+  /**
+   * One page of the records behind a dashboard cell. The browser names only the
+   * cell it was given; the host builds the filter and the page cursor.
+   */
+  dashboardCohort(
+    target: DashboardCellTarget,
+    cursor?: string,
+    lang?: string,
+  ) {
+    return this.request<DashboardCohortPage>(
+      `/dashboard-cohort${query({
+        widgetId: target.widgetId,
+        period: target.period,
+        binding: target.binding,
+        code: target.code,
+        cursor,
+        lang,
+      })}`,
+    );
+  }
   /** One record with the actions the session may take on it. */
   record(entity: string, id: string, lang?: string) {
     return this.request<RecordView>(
       `/entities/${encodeURIComponent(entity)}/records/${encodeURIComponent(id)}${query({ lang })}`,
+    );
+  }
+  /**
+   * The value an offered action fills `input` with from a field of the record
+   * `record`, read with the session's own access. Read once, when the record
+   * is chosen; submitting sends what the form holds.
+   */
+  actionInputValue(actionRef: string, input: string, record: string) {
+    return this.request<{ value: string }>(
+      `/actions/${encodeURIComponent(actionRef)}/inputs/${encodeURIComponent(input)}/value${query({ record })}`,
+    );
+  }
+  /**
+   * The one record a person's selector values identify, where the session may look it
+   * up. The values travel in the request body, never in a URL; a refusal, a record
+   * outside the session's boundary and a non-match answer alike.
+   */
+  lookupRecord(
+    entity: string,
+    selector: string,
+    values: Record<string, string>,
+  ) {
+    return this.request<RecordView>(
+      `/entities/${encodeURIComponent(entity)}/lookup`,
+      { method: "POST", body: JSON.stringify({ selector, values }) },
     );
   }
   /** The states one record has held, newest first, where the session may read them. */
@@ -217,9 +551,16 @@ export class HostClient {
       `/entities/${encodeURIComponent(entity)}/records/${encodeURIComponent(id)}/review-notes`,
     );
   }
-  async logout() {
-    await this.request<unknown>("/logout", { method: "POST" });
+  /**
+   * Ends the session at the host. The answer names the issuer's own logout URL
+   * where the issuer advertises one, so the person can end that session too.
+   */
+  async logout(): Promise<{ endSessionUrl?: string }> {
+    const answer = await this.request<{ endSessionUrl?: string }>("/logout", {
+      method: "POST",
+    });
     this.clear();
+    return answer;
   }
   /** An opaque target-bound action and idempotency attempt are the complete browser input. */
   prefill(actionRef: string, attemptId: string) {
@@ -309,15 +650,8 @@ export class HostClient {
       command.attemptId,
     );
   }
-  staffingAssign(command: CaseworkStaffingAssignCommand) {
-    return this.request<CaseworkStaffingAssignResult>(
-      "/casework/staffing/assign",
-      { method: "POST", body: JSON.stringify(command) },
-      command.attemptId,
-    );
-  }
   staffingPreviewCaseload(input: CaseworkStaffingCaseloadPreviewInput) {
-    return this.request<CaseworkStaffingCaseloadPreviewPage>(
+    return this.request<CaseworkStaffingCaseloadPreview>(
       "/casework/staffing/caseload/preview",
       { method: "POST", body: JSON.stringify(input) },
     );
@@ -328,90 +662,6 @@ export class HostClient {
       { method: "POST", body: JSON.stringify(command) },
       command.attemptId,
     );
-  }
-  caseworkItems(filters: CaseworkItemFilters = {}) {
-    return this.request<CaseworkWorkItemPage>(
-      `/casework/items${query({ ...filters })}`,
-    );
-  }
-  nextCaseworkItem(filters: { queue?: string } = {}) {
-    return this.request<CaseworkWorkItem | null>(
-      `/casework/items/next${query(filters)}`,
-    );
-  }
-  caseworkItem(id: string) {
-    return this.request<CaseworkWorkItem>(
-      `/casework/items/${encodeURIComponent(id)}`,
-    );
-  }
-  caseworkTaskPreviews(id: string) {
-    return this.request<CaseworkTaskPreviewList>(
-      `/casework/items/${encodeURIComponent(id)}/task-templates`,
-    );
-  }
-  caseworkTaskGrants(id: string) {
-    return this.request<CaseworkTaskGrantList>(
-      `/casework/items/${encodeURIComponent(id)}/task-grants`,
-    );
-  }
-  approveCaseworkTask(id: string, approvalRef: string, attemptId: string) {
-    return this.request<CaseworkTaskApprovalResult>(
-      `/casework/items/${encodeURIComponent(id)}/task-grants`,
-      { method: "POST", body: JSON.stringify({ approvalRef, attemptId }) },
-      attemptId,
-    );
-  }
-  revokeCaseworkTask(id: string, grant: string) {
-    return this.request<{ id: string; invalidated: boolean }>(
-      `/casework/items/${encodeURIComponent(id)}/task-grants/${encodeURIComponent(grant)}/revoke`,
-      { method: "POST" },
-    );
-  }
-  dispatchCaseworkTask(id: string, grant: string) {
-    return this.request<CaseworkTaskDispatchResult>(
-      `/casework/items/${encodeURIComponent(id)}/task-grants/${encodeURIComponent(grant)}/dispatch`,
-      { method: "POST", body: "{}" },
-    );
-  }
-  caseworkDraft(id: string) {
-    return this.request<CaseworkDraft>(
-      `/casework/items/${encodeURIComponent(id)}/draft`,
-    );
-  }
-  saveCaseworkDraft(
-    id: string,
-    draft: Pick<CaseworkDraft, "itemRevision" | "text">,
-  ) {
-    return this.request<CaseworkDraft>(
-      `/casework/items/${encodeURIComponent(id)}/draft`,
-      { method: "POST", body: JSON.stringify(draft) },
-    );
-  }
-  deleteCaseworkDraft(id: string, itemRevision: string) {
-    return this.request<{ deleted: true; itemRevision: string }>(
-      `/casework/items/${encodeURIComponent(id)}/draft/delete`,
-      { method: "POST", body: JSON.stringify({ itemRevision }) },
-    );
-  }
-  caseworkCommand(
-    id: string,
-    command: CaseworkCommand,
-    attemptId: string = crypto.randomUUID(),
-  ) {
-    return this.request<CaseworkCommandResult>(
-      `/casework/items/${encodeURIComponent(id)}/actions`,
-      { method: "POST", body: JSON.stringify({ ...command, attemptId }) },
-      attemptId,
-    );
-  }
-  caseworkHistory(id: string, cursor?: string, limit = 25) {
-    return this.request<CaseworkHistoryPage>(
-      `/casework/items/${encodeURIComponent(id)}/history${query({ cursor, limit: String(limit) })}`,
-    );
-  }
-  caseworkHoldings(cursor?: string) {
-    const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
-    return this.request<CaseworkHoldings>(`/casework/holdings${query}`);
   }
   caseworkDirectory() {
     return this.request<CaseworkDirectory>("/casework/directory");
@@ -427,9 +677,29 @@ export class HostClient {
       `/casework/reviews${query({ ...filters })}`,
     );
   }
+  /** The earliest due task the caller may take, or null when none is waiting. */
+  nextReviewTask(queue?: string) {
+    return this.request<ReviewTask | null>(
+      `/casework/reviews/next${query({ queue })}`,
+    );
+  }
+  ownReviewDecisions(filters: OwnReviewDecisionFilters = {}) {
+    return this.request<OwnReviewDecisionPage>(
+      `/casework/own-decisions${query({ ...filters })}`,
+    );
+  }
   reviewTask(taskId: string) {
     return this.request<ReviewTaskDetail>(
       `/casework/reviews/${encodeURIComponent(taskId)}`,
+    );
+  }
+  /** How review works here: the stages, deadlines and outcomes of each policy. */
+  reviewPolicies() {
+    return this.request<ReviewPolicyList>("/casework/review-policies");
+  }
+  supervisoryReviews(filters: SupervisoryReviewFilters = {}) {
+    return this.request<SupervisoryReviewTaskPage>(
+      `/casework/supervision${query({ ...filters })}`,
     );
   }
   /** Claim or release; the body is the attempt and the revision, nothing else. */
@@ -548,10 +818,14 @@ export class HostClient {
     ) as RecordSubmission;
     const existing = this.pending.get(submission.attemptId);
     if (existing && JSON.stringify(existing) !== JSON.stringify(immutable))
-      throw new HostError(409, {
-        code: "attempt.conflict",
-        message: "This submission reference is already in use.",
-      });
+      throw new HostError(
+        409,
+        {
+          code: "attempt.conflict",
+          message: "This submission reference is already in use.",
+        },
+        true,
+      );
     this.pending.set(submission.attemptId, immutable);
     const result = await this.request<RecordTaskResult>(
       "/tasks",
@@ -594,24 +868,4 @@ function query(values: { [key: string]: string | undefined }) {
   for (const [key, value] of Object.entries(values))
     if (value) params.set(key, value);
   return params.size ? `?${params}` : "";
-}
-/** Calendar dates are not instants: never apply the browser time zone. */
-export function displayDate(
-  value: string | null | undefined,
-  locale = "en-GB",
-): string {
-  if (!value) return "Not recorded";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const date = new Date(`${value}T00:00:00Z`);
-  if (
-    !Number.isFinite(date.valueOf()) ||
-    date.toISOString().slice(0, 10) !== value
-  )
-    return value;
-  return new Intl.DateTimeFormat(locale, {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
 }

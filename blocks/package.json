@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json",
+    "pdf-resources": "node scripts/write-pdf-resources.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "build:registry": "shadcn build registry.json --output registry-dist"
   },
@@ -20,6 +21,7 @@
     "clsx": "2.1.1",
     "cn": "0.2.6",
     "lucide-react": "1.43.0",
+    "pdfjs-dist": "6.3.289",
     "react": "19.2.8",
     "tailwind-merge": "3.6.0",
     "tailwindcss": "4.3.3",

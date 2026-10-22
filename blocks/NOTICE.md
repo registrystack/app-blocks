@@ -1,5 +1,12 @@
 # Component provenance
 
+The on-demand document viewer uses Mozilla PDF.js (`pdfjs-dist` 6.3.289), under
+the Apache License 2.0. Its unmodified worker, Adobe CMaps, Foxit fonts and
+Liberation fonts are bundled locally. The upstream `LICENSE`, `cmaps/LICENSE`,
+`standard_fonts/LICENSE_FOXIT` and `standard_fonts/LICENSE_LIBERATION` are emitted
+alongside the corresponding assets in both application builds. No PDF scripting
+or annotation UI is included.
+
 Everything under `ui/` comes from shadcn/ui on Base UI, style `base-nova`. The registry revision is the one served by `https://ui.shadcn.com/r/styles/base-nova/<name>.json` with `last-modified: Thu, 10 Sep 2026 02:10:18 GMT`, copied on 11 September 2026 with `shadcn` CLI 4.21.0.
 
 Copied unchanged, cross-component imports included: they keep the `@/components/ui/<name>` alias, which `components.json` and `tsconfig.json` here, and the project's `tsconfig.base.json`, resolve to `ui/`:
@@ -8,11 +15,14 @@ Copied unchanged, cross-component imports included: they keep the `@/components/
 
 Copied the same way from the registry revision with `last-modified: Wed, 09 Sep 2026 23:20:39 GMT` on 11 September 2026 with the same CLI: `dialog.tsx`, `dropdown-menu.tsx`, `kbd.tsx`, `popover.tsx`, `sheet.tsx`, `tooltip.tsx`. `Tooltip` needs a `TooltipProvider` above it; `WorkShell` supplies one.
 
+Every file under `ui/` names the start and end of a line rather than its left and right (`ms-2`, `ps-2`, `end-2`, `text-start`, `border-s`), as the same CLI writes them when `components.json` sets `"rtl": true`, which it does here, so a page read right to left mirrors them. The classes are the output of the CLI's own direction transform, written into the files line by line, because the transform also drops a file's leading comment. A class under a `data-[side=left]` or `data-[side=right]` variant keeps its physical side, as the transform leaves it.
+
 Carrying local differences:
 
 - `button.tsx` keeps the kit's variant and size set, a 44-pixel minimum target, wrapping labels and a native button default type. It composes `useRender` from `@base-ui/react/use-render` rather than the Base UI button primitive, because that primitive adds `role="button"` and the kit renders links through `render`. `nativeButton` is accepted so registry components type-check against it, and dropped rather than passed to the DOM.
 - `combobox.tsx` requires an accessible name where the copy leaves a control unnamed: `ComboboxTrigger` takes a `label` for the chevron-only button, `ComboboxInput` requires `triggerLabel` whenever it shows that trigger, and `ComboboxList` requires an `aria-label` because it is portalled away from the field it belongs to.
 - `input.tsx` predates the CLI adoption and carries the kit's `Input` and `Textarea` with the same 44-pixel minimum target.
+- `sheet.tsx` also opens at `inline-start` or `inline-end`, the start or end of a line as the page reads it, from Base UI's `useDirection`; `sheetSide` names the physical side that comes to. Its `left` and `right` sides keep the upstream physical classes: the transform makes their border and slide logical but leaves their position physical, which would draw a left sheet's border on its outer edge on a page read right to left.
 
 Base UI is the single primitive family in these blocks; it does not combine Base UI with Radix.
 
@@ -24,7 +34,7 @@ item, including the ones that are unmodified from upstream: an install then alwa
 this repository actually carries and tests, and needs no network access to shadcn.com. `shadcn
 add <name> --diff` against the live `base-nova` registry, run 29 September 2026, is what
 confirmed which files still match upstream and which have already drifted since the copy dates
-above:
+above. It was run before the files took the logical sides, so the statuses set those aside:
 
 | File | Status vs. live upstream (29 Sep 2026) | Kit item |
 |---|---|---|
@@ -45,7 +55,7 @@ above:
 | `popover.tsx` | drifted: `keepMounted` prop removed | `ui-popover` |
 | `select.tsx` | unmodified (cosmetic formatting only) | `ui-select` |
 | `separator.tsx` | unmodified (`"use client"` added upstream) | `ui-separator` |
-| `sheet.tsx` | drifted: close button's `closeLabel` prop removed, upstream hardcodes "Close" | `ui-sheet` |
+| `sheet.tsx` | drifted: close button's `closeLabel` prop removed, upstream hardcodes "Close"; modified, intentionally (see above) | `ui-sheet` |
 | `table.tsx` | drifted: header and cell padding, weight and hover colours changed | `ui-table` |
 | `tabs.tsx` | drifted: inactive tab's text colour changed (`text-muted-foreground` to `text-foreground/60`) | `ui-tabs` |
 | `textarea.tsx` | unmodified (cosmetic formatting only) | `ui-textarea` |

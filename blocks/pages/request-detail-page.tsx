@@ -1,4 +1,4 @@
-import { Fragment, useEffect } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import type {
   EntityModel,
@@ -18,9 +18,14 @@ import {
 } from "@registrystack/app-runtime/react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/blocks/lib/notice";
-import { humanizeName } from "@/blocks/lib/format";
-import { useBlockContent, type BlockContent } from "@/blocks/lib/content";
+import { fill, humanizeName, longDate } from "@/blocks/lib/format";
+import {
+  useBlockContent,
+  useLocale,
+  type BlockContent,
+} from "@/blocks/lib/content";
 import { FieldValue } from "@/blocks/fields/field-value";
+import { InPhrase } from "@/blocks/fields/values";
 import { BackLink } from "@/blocks/shell/back-link";
 import { Loading } from "@/blocks/shell/loading";
 import { splitRoute, useRoute } from "@/blocks/shell/routing";
@@ -49,6 +54,7 @@ import {
   StateNotice,
   approvedNotApplied,
 } from "@/blocks/request/request-status";
+import { UnavailableNotice } from "@/blocks/casework/shared";
 import { ReviewRecoveryNotices } from "@/blocks/request/request-recovery-notices";
 import { ReviewNotes } from "@/blocks/request/request-review-notes";
 import { VerifiedEvidenceSummary } from "@/blocks/request/verified-prefill";
@@ -167,17 +173,9 @@ function changeRows(
   target: RecordView | undefined,
   c: BlockContent,
 ): ChangeRow[] {
-  const written = writtenFields(
-    { record, request },
-    request.fields,
-  );
-  const rows = writtenChangeRows(
-    written,
-    view,
-    target,
-    c.currentUnavailable,
-  );
-  if (target)
+  const written = writtenFields({ record, request }, request.fields);
+  const rows = writtenChangeRows(written, view, target, c.currentUnavailable);
+  if (target && written.length > 0)
     for (const field of contextFields(
       record,
       written.map((item) => item.target.id),
@@ -201,6 +199,8 @@ function RequestRecoveryNotices({
   request: RequestView | undefined;
 }) {
   const pages = usePagesContent();
+  const applicationBlocked =
+    (request?.review?.application ?? request?.application)?.state === "blocked";
   return (
     <ReviewRecoveryNotices
       request={request}
@@ -208,9 +208,21 @@ function RequestRecoveryNotices({
       withdrawalPendingBody={pages.reviewWithdrawalPendingBody}
       submissionUnknownTitle={pages.reviewSubmissionUnknownTitle}
       submissionUnknownBody={pages.reviewSubmissionUnknownBody}
-      operatorAttentionTitle={pages.reviewOperatorAttentionTitle}
-      operatorAttentionBody={pages.reviewOperatorAttentionBody}
-      operatorAttentionBodies={pages.reviewOperatorAttentionBodies}
+      operatorAttentionTitle={
+        applicationBlocked
+          ? pages.applicationOperatorAttentionTitle
+          : pages.reviewOperatorAttentionTitle
+      }
+      operatorAttentionBody={
+        applicationBlocked
+          ? pages.applicationOperatorAttentionBody
+          : pages.reviewOperatorAttentionBody
+      }
+      operatorAttentionBodies={
+        applicationBlocked
+          ? pages.applicationOperatorAttentionBodies
+          : pages.reviewOperatorAttentionBodies
+      }
     />
   );
 }
@@ -222,15 +234,21 @@ const reviewResultPollMs = 5_000;
 const reviewResultPollCapMs = 60_000;
 
 /**
- * A submitted request's result arrives from Casework through a delivery, so it is read again
- * until it does, each wait twice the last.
+ * A submitted request is read again while it awaits a Casework result or while
+ * BReg is automatically applying it, with or without a review, each wait twice
+ * the last.
  */
 function awaitingReviewResult(
   view: RecordView | undefined,
   rereads: number,
 ): number | false {
-  return view?.request?.state === "submitted" &&
-    view.request.review?.result.state === "pending"
+  const request = view?.request;
+  const application = request?.review?.application ?? request?.application;
+  const automatic =
+    application?.mode === "automatic" &&
+    ["pending", "applying"].includes(application.state);
+  return request?.state === "submitted" &&
+    (request.review?.result.state === "pending" || automatic)
     ? backOffInterval(reviewResultPollMs, reviewResultPollCapMs, rereads)
     : false;
 }
@@ -270,11 +288,12 @@ export function RequestDetailPage({
       />
     );
   const entities = register.entities;
-  const request = entities?.followedRequest && routedRequest(entities, query);
+  const request = entities && routedRequest(entities, query);
   if (!entities || !request)
     return <ErrorPanel error={unavailableError(shell.unavailable)} />;
   return (
     <RequestRead
+      key={`${request.id}:${id}`}
       entities={entities}
       request={request}
       id={id}
@@ -309,15 +328,36 @@ function RequestRead({
   const pages = usePagesContent(),
     session = useAuthority(),
     query = useRecord(request.id, id, undefined, awaitingReviewResult);
+  // A fresh first read needs no second trip. Cached data may have survived the
+  // edit page that invalidated it, so the request page explicitly reads again
+  // and keeps every write locked from its first render until that read settles.
+  const cachedOnEntry = useRef(query.data !== undefined);
+  const [entryReadSettled, setEntryReadSettled] = useState(
+    !cachedOnEntry.current,
+  );
+  useEffect(() => {
+    if (!cachedOnEntry.current) return;
+    let active = true;
+    // Join an invalidation already reading this request instead of cancelling
+    // it and briefly replacing one refresh with another.
+    void query.refetch({ cancelRefetch: false }).then((result) => {
+      if (active && !result.error) setEntryReadSettled(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [query.refetch]);
   if (query.isPending) return <Loading />;
   if (query.error || !query.data)
     return (
       <ErrorPanel
         error={query.error}
-        retry={() => void query.refetch()}
-        unavailableTitle={
-          session.role === "holder" ? pages.requestUnavailable : undefined
+        retry={() =>
+          void query.refetch().then((result) => {
+            if (!result.error) setEntryReadSettled(true);
+          })
         }
+        unavailableTitle={session.holder ? pages.requestUnavailable : undefined}
       />
     );
   return (
@@ -326,7 +366,7 @@ function RequestRead({
       request={request}
       view={query.data}
       refetch={() => query.refetch()}
-      refreshing={query.refreshing}
+      refreshing={!entryReadSettled || query.refreshing}
       useTask={useTask}
       useUpload={useUpload}
       useRemoval={useRemoval}
@@ -361,7 +401,8 @@ function RequestWithTarget({
     signal: AbortSignal,
   ) => Promise<DocumentSource>;
 }) {
-  const record = recordOfRequest(entities, request, view.request?.target?.entity);
+  const context = view.request?.entry ?? view.request?.target;
+  const record = recordOfRequest(entities, request, context?.entity);
   const target = useRecord(
     record.id,
     readableTarget({ ...entities, record }, view.request),
@@ -389,14 +430,25 @@ function RequestWithTarget({
  * names; any other account, and any read that fails, gets the not-available
  * wording.
  */
-function ReviewerNote({ entity, id }: { entity: string; id: string }) {
+function ReviewerNote({
+  entity,
+  id,
+  reason,
+}: {
+  entity: string;
+  id: string;
+  reason?: string;
+}) {
   const notes = useRequesterReviewNotes(entity, id);
   if (notes.isPending) return <Loading />;
   // A read that settled without data (a fetch error the hook did not turn
   // into a "not-available" state itself) gets the same undisclosed wording
   // as any other state the block does not name explicitly.
   return (
-    <ReviewNotes notes={notes.data ?? { state: "unavailable", notes: [] }} />
+    <ReviewNotes
+      notes={notes.data ?? { state: "unavailable", notes: [] }}
+      reason={reason}
+    />
   );
 }
 
@@ -405,7 +457,13 @@ function ReviewerNote({ entity, id }: { entity: string; id: string }) {
  * from the review's own history on their own profile. Casework decides what
  * the officer may read; a read that fails gets the not-available wording.
  */
-function OfficerReviewerNote({ reviewId }: { reviewId: string }) {
+function OfficerReviewerNote({
+  reviewId,
+  reason,
+}: {
+  reviewId: string;
+  reason?: string;
+}) {
   const block = useBlockContent();
   const history = useReviewHistory(reviewId);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = history;
@@ -414,7 +472,12 @@ function OfficerReviewerNote({ reviewId }: { reviewId: string }) {
     if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
   if (history.error && !history.data)
-    return <ReviewNotes notes={{ state: "unavailable", notes: [] }} />;
+    return (
+      <ReviewNotes
+        notes={{ state: "unavailable", notes: [] }}
+        reason={reason}
+      />
+    );
   if (!history.data || hasNextPage) return <Loading />;
   const notes = history.data.flatMap((entry) => {
     const detail = entry.detail;
@@ -429,13 +492,18 @@ function OfficerReviewerNote({ reviewId }: { reviewId: string }) {
     )
       return [];
     return [
-      { eventId: entry.eventId, note: detail.note, occurredAt: entry.occurredAt },
+      {
+        eventId: entry.eventId,
+        note: detail.note,
+        occurredAt: entry.occurredAt,
+      },
     ];
   });
   return (
     <ReviewNotes
       notes={{ state: notes.length ? "available" : "none", notes }}
       noNote={block.requesterNoNote}
+      reason={reason}
     />
   );
 }
@@ -469,39 +537,59 @@ function RequestDetail({
 }) {
   const pages = usePagesContent(),
     block = useBlockContent(),
+    locale = useLocale(),
     routes = useRegisterRoutes(),
     session = useAuthority(),
     task = useTask();
   const [announcement, announce] = useAnnouncement();
-  const record = recordOfRequest(entities, request, view.request?.target?.entity);
+  const [writingAttachments, setWritingAttachments] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const setAttachmentWriting = useCallback(
+    (slot: string, writing: boolean) =>
+      setWritingAttachments((current) => {
+        if (current.has(slot) === writing) return current;
+        const next = new Set(current);
+        if (writing) next.add(slot);
+        else next.delete(slot);
+        return next;
+      }),
+    [],
+  );
+  const requestContext = view.request?.entry ?? view.request?.target;
+  const record = recordOfRequest(entities, request, requestContext?.entity);
   const state = view.request?.state ?? "draft";
   const result = view.request?.review?.result.state;
   // The human reference: the target record's title, never the UUID.
   const reference =
-    (target && recordTitle(record, target)) ??
-    recordTitle(request, view);
+    (target && recordTitle(record, target, locale)) ?? recordTitle(request, view, locale);
 
   const lifecycle = view.actions.filter(
     (action) => action.name === "lifecycle",
   );
-  const applyAction =
+  const offeredApplyAction =
     lifecycle.find((action) => action.action === "apply") ?? null;
   const otherActions = lifecycle.filter((action) =>
     otherLifecycleNames.includes(action.action ?? ""),
   );
   const patchAction = view.actions.find((action) => action.name === "patch");
-  const applying = session.role === "reviewer" && applyAction !== null;
-  const holder = session.role === "holder";
+  const holder = session.holder;
   const approved = approvedNotApplied(view.request);
+  // Some BReg policies advertise apply before the external result is
+  // reconciled and enforce the precondition on write. Keep that authority,
+  // while only inviting the action once the same native read confirms it.
+  const applyAction = approved ? offeredApplyAction : null;
+  // The wording follows the apply the registry offers, not the session's role.
+  const applying = applyAction !== null;
+  const applied = view.request?.applied;
   // A send-back leaves the request submitted; its review result says so.
   const sentBack =
     state === "changes-requested" || result === "changesRequested";
   const rejected = !sentBack && (state === "rejected" || result === "rejected");
+  const publicReason = view.request?.review?.result.publicReason;
 
-  const written = writtenFields(
-    { record, request },
-    request.fields,
-  );
+  const written = writtenFields({ record, request }, request.fields);
+  const changes = changeRows(record, request, view, target, block);
   const writtenIds = written.map((item) => item.field.id);
   const asked = request.sections
     .flatMap((section) => section.fields)
@@ -522,30 +610,58 @@ function RequestDetail({
           field.id === evidence.field || field.apiName === evidence.field,
       )
     : undefined;
-  const context = target
-    ? contextFields(
-        record,
-        written.map((item) => item.target.id),
-      )
-    : [];
+  const context =
+    target && written.length > 0
+      ? contextFields(
+          record,
+          written.map((item) => item.target.id),
+        )
+      : [];
 
   const targetPath =
-    view.request?.target &&
-    recordPath(
-      routes,
-      entities,
-      view.request.target.entity,
-      view.request.target.id,
+    requestContext &&
+    recordPath(routes, entities, requestContext.entity, requestContext.id);
+  const resultLinks = (view.request?.results ?? []).flatMap((result) => {
+    if (
+      [view.request?.entry, view.request?.target].some(
+        (context) =>
+          context?.entity === result.entity && context.id === result.id,
+      )
+    )
+      return [];
+    const entity = (entities.records ?? [entities.record]).find(
+      (candidate) => candidate.id === result.entity,
     );
+    const path =
+      entity?.operations.get &&
+      recordPath(routes, entities, result.entity, result.id);
+    return entity && path ? [{ ...result, entity, path }] : [];
+  });
+  const queuePath = requestRoute(entities, routes.requests, request.id);
+  const contextualBack = request.navigation === false && targetPath;
+  const hasActions =
+    applyAction !== null ||
+    otherActions.length > 0 ||
+    patchAction !== undefined;
+  const hasDecisionFeedback = Boolean(
+    task.pending ||
+    task.unknown ||
+    task.error ||
+    task.result ||
+    task.staleConflict ||
+    task.confirmed,
+  );
 
   return (
     <>
-      <BackLink href={routes.requests}>
-        {session.role === "reviewer"
-          ? pages.reviewQueue
-          : session.role === "holder"
-            ? pages.ownRequests
-            : pages.requestsHome}
+      <BackLink href={contextualBack || queuePath}>
+        {contextualBack
+          ? pages.backToRecord
+          : session.decidesRequests
+            ? pages.reviewQueue
+            : holder
+              ? pages.ownRequests
+              : pages.requestsHome}
       </BackLink>
       {/* The state of the case comes before the h1. */}
       {approved ? (
@@ -558,7 +674,25 @@ function RequestDetail({
           description={stateDescription(state, pages, holder)}
         />
       )}
+      {state === "applied" && applied && (applied.at || applied.by) && (
+        <p className="muted [overflow-wrap:anywhere]">
+          {applied.at && (
+            <>
+              {pages.appliedOnLabel} {longDate(applied.at, locale)}
+            </>
+          )}
+          {applied.at && applied.by && " · "}
+          {applied.by && (
+            <>
+              {pages.appliedByLabel} {applied.by}
+            </>
+          )}
+        </p>
+      )}
       <RequestRecoveryNotices request={view.request} />
+      {view.request?.reviewUnavailable && (
+        <UnavailableNotice {...view.request.reviewUnavailable} />
+      )}
       <PageHeading
         eyebrow={reference}
         title={pages.requestTitle}
@@ -579,135 +713,206 @@ function RequestDetail({
                 : pages.staffRevisionReason
               : pages.rejectionReason}
           </h2>
-          {session.role === "holder" ? (
-            <ReviewerNote entity={view.entity} id={view.id} />
+          {holder ? (
+            <ReviewerNote
+              entity={view.entity}
+              id={view.id}
+              reason={publicReason}
+            />
           ) : session.caseworkProfile &&
             view.request?.review?.submission.requestId ? (
             <OfficerReviewerNote
               reviewId={view.request.review.submission.requestId}
+              reason={publicReason}
             />
           ) : (
-            <p>{block.undisclosedRevisionReason}</p>
+            <ReviewNotes
+              notes={{ state: "unavailable", notes: [] }}
+              reason={publicReason}
+            />
           )}
         </section>
       )}
-      <section>
-        <h2>{block.proposedHeading}</h2>
-        <ChangeTable rows={changeRows(record, request, view, target, block)}>
-          {targetPath && (
-            <Button
-              render={<a href={`#${targetPath}`} />}
-              variant="outline"
-            >
+      {changes.length > 0 ? (
+        <section>
+          <h2>{block.proposedHeading}</h2>
+          <ChangeTable rows={changes}>
+            {targetPath && !contextualBack && (
+              <Button render={<a href={`#${targetPath}`} />} variant="outline">
+                {pages.viewRecordLink}
+                <ArrowUpRight />
+              </Button>
+            )}
+          </ChangeTable>
+        </section>
+      ) : (
+        targetPath &&
+        !contextualBack && (
+          <div className="actions">
+            <Button render={<a href={`#${targetPath}`} />} variant="outline">
               {pages.viewRecordLink}
               <ArrowUpRight />
             </Button>
+          </div>
+        )
+      )}
+      {(asked.length > 0 || evidence) && (
+        <section>
+          <h2>
+            {holder ? block.holderWhyAskedHeading : block.whyAskedHeading}
+          </h2>
+          {asked.length > 0 && (
+            <AnswerList
+              items={asked.map((field) => ({
+                key: field.id,
+                label: field.label,
+                value: (
+                  <FieldValue field={field} value={view.values[field.id]} />
+                ),
+              }))}
+            />
           )}
-        </ChangeTable>
-      </section>
-      <section>
-        <h2>{holder ? block.holderWhyAskedHeading : block.whyAskedHeading}</h2>
-        {asked.length > 0 && (
-          <AnswerList
-            items={asked.map((field) => ({
-              key: field.id,
-              label: field.label,
-              value: <FieldValue field={field} value={view.values[field.id]} />,
-            }))}
-          />
-        )}
-        {evidence && (
-          <VerifiedEvidenceSummary
-            evidence={evidence}
-            changedValue={
-              evidence.changedAfterVerification && evidenceField ? (
-                <FieldValue
-                  field={evidenceField}
-                  value={view.values[evidenceField.id]}
-                />
-              ) : undefined
-            }
-          />
-        )}
-      </section>
+          {evidence && (
+            <VerifiedEvidenceSummary
+              evidence={evidence}
+              changedValue={
+                evidence.changedAfterVerification && evidenceField ? (
+                  <FieldValue
+                    field={evidenceField}
+                    value={view.values[evidenceField.id]}
+                  />
+                ) : undefined
+              }
+            />
+          )}
+        </section>
+      )}
+      {resultLinks.length > 0 && (
+        <section>
+          <h2>{pages.requestResultsHeading}</h2>
+          <div className="actions">
+            {resultLinks.map((result) => (
+              <Button
+                key={`${result.entity.id}:${result.id}:${result.revision}`}
+                render={<a href={`#${result.path}`} />}
+                variant="outline"
+              >
+                {fill(
+                  pages.viewRequestResult,
+                  { label: result.entity.label },
+                  locale,
+                )}
+                <ArrowUpRight />
+              </Button>
+            ))}
+          </div>
+        </section>
+      )}
       <SupportingDocuments
         record={{ entity: view.entity, id: view.id, revision: view.revision }}
         slots={view.attachments}
         useUpload={useUpload}
         useRemoval={useRemoval}
         openPdf={openPdf}
+        writesDisabled={
+          refreshing ||
+          task.pending ||
+          task.unknown ||
+          writingAttachments.size > 0
+        }
+        onWritingChange={setAttachmentWriting}
       />
-      <DecisionForm
-        title={
-          applying
-            ? pages.applyApproved
-            : holder
-              ? pages.holderActionsHeading
-              : pages.decideHeading
-        }
-        hint={
-          applying
-            ? pages.applyApprovedHint
-            : holder
-              ? pages.holderActionsHint
-              : pages.actionExplanation
-        }
-        reference={reference ?? pages.unnamedRequest}
-        choices={[]}
-        primaryAction={applyAction}
-        secondaryActions={otherActions}
-        hasActions={lifecycle.length > 0 || patchAction !== undefined}
-        needsReason={() => false}
-        describeAction={(action) =>
-          actionDescription(action.action ?? action.name, pages, holder)
-        }
-        checkDetails={
-          target &&
-          context.length > 0 && (
-            <p className="muted">
-              {context.map((field, index) => (
-                <Fragment key={field.id}>
-                  {index > 0 && " · "}
-                  <FieldValue field={field} value={target.values[field.id]} />
-                </Fragment>
-              ))}
-            </p>
-          )
-        }
-        header={
-          patchAction && (
-            <Button
-              render={
-                <a
-                  href={`#${requestRoute(entities, routes.editRequest(view.id), request.id)}`}
-                />
-              }
-              variant="outline"
-            >
-              {pages.editDraft}
-            </Button>
-          )
-        }
-        task={task}
-        submit={(action: RecordActionReference) =>
-          task.submit(
-            recordTask(
-              action,
-              { entity: view.entity, id: view.id },
-              { expectedRevision: view.revision },
-            ),
-          )
-        }
-        refetch={refetch}
-        announce={announce}
-        choiceLabel={(action) => choiceLabel(action, pages)}
-        reconcileHref={`#${routes.requests}`}
-        renderError={(error) => <ErrorPanel error={error} />}
-        refreshing={refreshing}
-        decidedBody={
-          state === "applied" ? pages.decidedAppliedBody : pages.decidedBody
-        }
-      />
+      {(hasActions || hasDecisionFeedback) && (
+        <DecisionForm
+          title={
+            applying
+              ? pages.applyApproved
+              : holder
+                ? pages.holderActionsHeading
+                : pages.decideHeading
+          }
+          hint={
+            applying
+              ? pages.applyApprovedHint
+              : holder
+                ? pages.holderActionsHint
+                : pages.actionExplanation
+          }
+          reference={reference ?? pages.unnamedRequest}
+          choices={[]}
+          primaryAction={applyAction}
+          primaryReason={
+            applyAction
+              ? { label: pages.applyReasonLabel, hint: pages.applyReasonHint }
+              : undefined
+          }
+          secondaryActions={otherActions}
+          hasActions={hasActions}
+          needsReason={() => false}
+          describeAction={(action) =>
+            actionDescription(action.action ?? action.name, pages, holder)
+          }
+          checkDetails={
+            target &&
+            context.length > 0 && (
+              <p className="muted">
+                <InPhrase>
+                  {context.map((field, index) => (
+                    <Fragment key={field.id}>
+                      {index > 0 && " · "}
+                      <FieldValue
+                        field={field}
+                        value={target.values[field.id]}
+                      />
+                    </Fragment>
+                  ))}
+                </InPhrase>
+              </p>
+            )
+          }
+          header={
+            patchAction && (
+              <Button
+                render={
+                  <a
+                    href={`#${requestRoute(entities, routes.editRequest(view.id), request.id)}`}
+                  />
+                }
+                variant="outline"
+              >
+                {pages.editDraft}
+              </Button>
+            )
+          }
+          task={task}
+          submit={(action: RecordActionReference, reason: string) =>
+            task.submit(
+              recordTask(
+                action,
+                { entity: view.entity, id: view.id },
+                {
+                  expectedRevision: view.revision,
+                  // Only an apply carries the optional reason; BReg bounds it.
+                  ...(action.action === "apply" && reason.trim()
+                    ? { body: { reason } }
+                    : {}),
+                },
+              ),
+            )
+          }
+          refetch={refetch}
+          announce={announce}
+          choiceLabel={(action) => choiceLabel(action, pages)}
+          reconcileHref={`#${queuePath}`}
+          renderError={(error) => <ErrorPanel error={error} />}
+          refreshing={refreshing || writingAttachments.size > 0}
+          decidedBody={(action) =>
+            action?.action === "apply" || state === "applied"
+              ? pages.decidedAppliedBody
+              : pages.decidedBody
+          }
+        />
+      )}
     </>
   );
 }

@@ -7,22 +7,19 @@ import { useMemo, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   useCommand,
-  useCommandBatch,
   useCommandRecovery,
   useSettledElsewhere,
 } from "./command-hooks.js";
 import {
   absenceEndCommand,
   absenceSaveCommand,
-  assignmentCommand,
   caseloadCommand,
-  caseloadPreviewRequest,
   staffingCommands,
   type CaseloadPreviewInput,
 } from "./staffing-commands.js";
 import { useAuthority, useHost } from "./react.js";
 import type {
-  CaseworkStaffingCaseloadPreviewPage,
+  CaseworkStaffingCaseloadPreview,
   CaseworkStaffingTargetQuery,
 } from "./casework-staffing-types.js";
 
@@ -93,22 +90,6 @@ export function useStaffingAbsences(enabled: boolean) {
 }
 
 /**
- * The assignment of one work item. An unresolved assignment of the item, made on its
- * form or by a reassignment, is restored wherever the item's form is shown.
- */
-export function useStaffingAssignment(itemId: string) {
-  const command = useCommand(assignmentCommand, itemId);
-  useSettledElsewhere(command.state, assignmentCommand.scope, command.dismiss);
-  return command;
-}
-/**
- * One assignment per item, sharing each item's assignment form: an unresolved
- * assignment of an item, made here or there, locks both.
- */
-export function useStaffingAssignments(itemIds: string[]) {
-  return useCommandBatch(assignmentCommand, itemIds);
-}
-/**
  * Recording a new cover (`"create"`) or changing one. An unresolved write is restored
  * whenever the cover is opened again, even after a reload.
  */
@@ -138,32 +119,26 @@ export function useStaffingRecovery() {
 }
 
 /**
- * The work a movement would take, page by page, as Casework previews it. It is never
- * cached or read again on its own: each first page issues a preview reference that its
- * continuations depend on. A failure is kept in `failure`.
+ * The review tasks a movement would take, as one preview Casework fences. It is never
+ * cached or read again on its own: each preview issues the reference its apply names.
+ * A failure is kept in `failure`.
  */
 export function useCaseloadPreview() {
   const host = useHost();
-  const [pages, setPages] = useState<CaseworkStaffingCaseloadPreviewPage[]>([]);
+  const [previewed, setPreviewed] =
+    useState<CaseworkStaffingCaseloadPreview | null>(null);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<unknown>();
-  /**
-   * Asks for the first page, or the page after `cursor`. Resolves to every page loaded,
-   * or null when the preview failed.
-   */
+  /** Asks for the preview of a movement. Resolves to it, or null when the preview failed. */
   async function preview(
     input: CaseloadPreviewInput,
-    cursor?: string,
-  ): Promise<CaseworkStaffingCaseloadPreviewPage[] | null> {
+  ): Promise<CaseworkStaffingCaseloadPreview | null> {
     setPending(true);
     setFailure(undefined);
     try {
-      const page = await host.staffingPreviewCaseload(
-        caseloadPreviewRequest(input, cursor, pages),
-      );
-      const loaded = cursor ? [...pages, page] : [page];
-      setPages(loaded);
-      return loaded;
+      const answer = await host.staffingPreviewCaseload(input);
+      setPreviewed(answer);
+      return answer;
     } catch (caught) {
       setFailure(caught);
       return null;
@@ -172,11 +147,12 @@ export function useCaseloadPreview() {
     }
   }
   return {
-    pages,
+    /** The preview Casework answered last, until the movement changes. */
+    previewed,
     pending,
     failure,
     preview,
-    /** Drops every page, for a movement that changed. */
-    reset: () => setPages([]),
+    /** Drops the preview, for a movement that changed. */
+    reset: () => setPreviewed(null),
   };
 }

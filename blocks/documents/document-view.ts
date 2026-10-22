@@ -14,6 +14,20 @@ export interface DocumentSource {
   destroy: () => void;
 }
 
+/**
+ * An `openPdf` that loads the renderer on the first open, so a page without a
+ * PDF never downloads it. A load that fails rejects, which the preview shows as
+ * the unavailable state; the next open loads again.
+ */
+export function lazyPdfOpener(
+  load: () => Promise<{
+    openPdf: (bytes: ArrayBuffer, signal: AbortSignal) => Promise<DocumentSource>;
+  }>,
+) {
+  return async (bytes: ArrayBuffer, signal: AbortSignal) =>
+    (await load()).openPdf(bytes, signal);
+}
+
 /** Refuse oversized raster dimensions before allocating a decoded bitmap. */
 export function checkImageDimensions(bytes: ArrayBuffer, type: string) {
   const data = new DataView(bytes);

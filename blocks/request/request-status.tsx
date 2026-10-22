@@ -3,8 +3,13 @@ import { ArrowRight } from "lucide-react";
 import type { RequestView } from "@registrystack/app-runtime";
 import { problemView } from "@registrystack/app-runtime";
 import { Button } from "@/components/ui/button";
+import { fillNodes } from "@/blocks/lib/format";
 import { Notice } from "@/blocks/lib/notice";
-import { useBlockContent } from "@/blocks/lib/content";
+import {
+  ConfirmedReceipt,
+  useBlockContent,
+  useLocale,
+} from "@/blocks/lib/content";
 
 /**
  * The state of the case, stated before the h1. The caller supplies the
@@ -80,20 +85,29 @@ export function CommandFeedback({
   confirmedLabel?: string;
 }) {
   const c = useBlockContent();
+  const locale = useLocale();
   const result = task.result;
-  const retryRefusal = problemView(task.error).message;
+  const retry = problemView(task.error);
   if (task.pending) return <Notice>{c.saving}</Notice>;
   if (task.unknown)
     return (
       <Notice tone="warning" title={c.unknownTitle}>
         <p>{c.unknownBody}</p>
-        {retryRefusal !== null && (
+        {retry.status !== null && (
           <p>
-            {c.retryRefused} {retryRefusal}
+            {c.retryRefused}
+            {retry.message !== null && ` ${retry.message}`}
           </p>
         )}
         <p className="reference">
-          {c.receipt}: <span className="font-mono">{task.reference}</span>
+          {fillNodes(
+            c.labelled,
+            {
+              label: c.receipt,
+              value: <span className="font-mono">{task.reference}</span>,
+            },
+            locale,
+          )}
         </p>
         <div className="actions">
           <Button onClick={() => void task.retry()}>{c.exactRetry}</Button>
@@ -107,9 +121,7 @@ export function CommandFeedback({
   if (result?.outcome === "confirmed")
     return (
       <Notice tone="success" title={c.confirmed}>
-        <p className="reference">
-          {c.receipt}: <span className="font-mono">{result.receipt}</span>
-        </p>
+        <ConfirmedReceipt receipt={result.receipt} />
         {onConfirmed && result.resource && (
           <Button onClick={() => onConfirmed(result.resource!.id)}>
             {confirmedLabel ?? c.openRequest}

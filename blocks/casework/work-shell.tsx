@@ -8,9 +8,10 @@ import {
 } from "react";
 import {
   ChevronDown,
+  ChevronRight,
   CircleUserRound,
-  Library,
   LogOut,
+  UserRoundCog,
   Menu,
   Search,
   type LucideIcon,
@@ -36,6 +37,8 @@ import {
 } from "@/components/ui/sheet";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useCaseworkContent } from "@/blocks/casework/casework-content";
+import { useLocale } from "@/blocks/lib/content";
+import { fill } from "@/blocks/lib/format";
 import { Notice, caseworkLocalZone } from "@/blocks/casework/shared";
 import { CommandPalette, type Place } from "@/blocks/casework/command-palette";
 import {
@@ -47,8 +50,8 @@ import {
 } from "@/blocks/casework/shortcuts";
 
 /**
- * The staff work shell: one dense header, a sidebar that is a plain list of
- * places, and the page. It is built for the officer who lives in it all day,
+ * The staff work shell: a dark sidebar that is a plain list of places, one
+ * dense header with the breadcrumb, search and account, and the page. It is built for the officer who lives in it all day,
  * so it spends no height on a service name or a signed-in line: the account
  * menu carries those, the palette and the shortcuts carry the navigation.
  * Which places exist, which one is current for a route, and where a route
@@ -63,6 +66,13 @@ export interface NavItem extends Place {
 }
 
 export type NavGroup = NavItem[];
+
+/** Ends the session and signs the officer in again as another account. */
+export interface SwitchAccountAction {
+  label: string;
+  /** Rejects when the sign-out is refused, so the officer stays signed in and is told. */
+  run: () => Promise<void>;
+}
 
 /**
  * The current place is the one whose path, or one of the paths it stands
@@ -85,6 +95,29 @@ export function currentPlace(items: NavItem[], path: string): NavItem | null {
     }
   }
   return best;
+}
+
+/**
+ * The brand at the head of the sidebar: a mark of three leaning bars, the
+ * service name and the beta chip.
+ */
+function Brand({ brand, href }: { brand: string; href: string }) {
+  const c = useCaseworkContent();
+  return (
+    <a href={href} className="brand">
+      <svg
+        className="work-brand-mark"
+        viewBox="0 0 28 28"
+        width="28"
+        height="28"
+        aria-hidden="true"
+      >
+        <path d="M6 20 9 8h3.5L9.5 20zM12 20l3-12h3.5L15.5 20zM18 20l3-12h3.5L21.5 20z" />
+      </svg>
+      <span className="work-brand-name">{brand}</span>
+      <span className="beta">{c.beta}</span>
+    </a>
+  );
 }
 
 /**
@@ -126,17 +159,22 @@ function Places({
 }
 
 /**
- * The signed-in officer's own corner: their name and time zone, the switch
- * for single-key shortcuts, and sign-out. A failed sign-out leaves the
+ * The signed-in officer's own corner: their name and time zone, the caller's
+ * own choices, the switch for single-key shortcuts, switching account where
+ * the caller offers it, and sign-out. A failed sign-out or switch leaves the
  * officer signed in and says so; it does not stop them working.
  */
 function AccountMenu({
   displayName,
   container,
+  choices,
+  switchAccount,
   renderSignOutError,
 }: {
   displayName?: string;
   container: RefObject<HTMLElement | null>;
+  choices?: ReactNode;
+  switchAccount?: SwitchAccountAction;
   /** Renders the host's own error when sign-out fails. Falls back to a generic notice when omitted. */
   renderSignOutError?: (error: unknown) => ReactNode;
 }) {
@@ -174,6 +212,7 @@ function AccountMenu({
             </DropdownMenuLabel>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
+          {choices}
           <DropdownMenuCheckboxItem
             checked={shortcuts}
             onCheckedChange={setShortcuts}
@@ -181,6 +220,14 @@ function AccountMenu({
             {c.shortcutsSetting}
           </DropdownMenuCheckboxItem>
           <DropdownMenuSeparator />
+          {switchAccount && (
+            <DropdownMenuItem
+              onClick={() => void switchAccount.run().catch(setError)}
+            >
+              <UserRoundCog size={16} aria-hidden="true" />
+              {switchAccount.label}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => void signOut().catch(setError)}>
             <LogOut size={16} aria-hidden="true" />
             {c.signOut}
@@ -200,6 +247,9 @@ function AccountMenu({
 function Frame({
   displayName,
   brand,
+  description,
+  accountChoices,
+  switchAccount,
   groups,
   current,
   route,
@@ -210,6 +260,9 @@ function Frame({
 }: {
   displayName?: string;
   brand: string;
+  description?: string;
+  accountChoices?: ReactNode;
+  switchAccount?: SwitchAccountAction;
   groups: NavGroup[];
   current: NavItem | null;
   route: string;
@@ -219,6 +272,7 @@ function Frame({
   children: ReactNode;
 }) {
   const c = useCaseworkContent();
+  const locale = useLocale();
   const items = useMemo(() => groups.flat(), [groups]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -253,46 +307,64 @@ function Frame({
       >
         {c.skip}
       </a>
-      <header ref={header} className="work-header">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="work-menu"
-          aria-label={c.navMenu}
-          onClick={() => setMenuOpen(true)}
-        >
-          <Menu aria-hidden="true" />
-        </Button>
-        <a href={hrefFor("/")} className="brand">
-          <span className="work-brand-mark" aria-hidden="true">
-            <Library size={18} />
-          </span>
-          <span className="work-brand-name">{brand}</span>
-          <span className="beta">{c.beta}</span>
-        </a>
-        <button
-          type="button"
-          className="work-search"
-          onClick={() => setPaletteOpen(true)}
-          aria-label={c.goTo}
-        >
-          <Search size={15} aria-hidden="true" />
-          <span aria-hidden="true">{c.goToPlaceholder}</span>
-          <Kbd aria-hidden="true">{modifierLabel()} K</Kbd>
-        </button>
-        <AccountMenu
-          displayName={displayName}
-          container={header}
-          renderSignOutError={renderSignOutError}
-        />
-      </header>
-      <div className="work-body">
-        <aside className="work-sidebar" aria-label={c.staffName}>
-          <div className="work-sidebar-inner">
-            <Places groups={groups} current={current} hrefFor={hrefFor} />
-            <p className="work-sidebar-note">{c.footerNote}</p>
-          </div>
-        </aside>
+      <aside className="work-sidebar" aria-label={c.staffName}>
+        <div className="work-sidebar-inner">
+          <Brand brand={brand} href={hrefFor("/")} />
+          <p className="work-workspace">{c.staffName}</p>
+          {description && (
+            <p className="work-workspace-description">{description}</p>
+          )}
+          <Places groups={groups} current={current} hrefFor={hrefFor} />
+          <p className="work-sidebar-note">{c.footerNote}</p>
+        </div>
+      </aside>
+      <div className="work-column">
+        <header ref={header} className="work-header">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="work-menu"
+            aria-label={c.navMenu}
+            onClick={() => setMenuOpen(true)}
+          >
+            <Menu aria-hidden="true" />
+          </Button>
+          <a href={hrefFor("/")} className="work-header-brand">
+            {brand}
+          </a>
+          <p className="work-crumb">
+            <span>{brand}</span>
+            {current && (
+              <>
+                <ChevronRight size={14} aria-hidden="true" />
+                <span>{current.label}</span>
+              </>
+            )}
+          </p>
+          <button
+            type="button"
+            className="work-search"
+            onClick={() => setPaletteOpen(true)}
+            aria-label={c.goTo}
+          >
+            <Search size={15} aria-hidden="true" />
+            <span aria-hidden="true">{c.goToPlaceholder}</span>
+            <Kbd aria-hidden="true">
+              {fill(
+                c.shortcutChord,
+                { modifier: modifierLabel(c), key: "K" },
+                locale,
+              )}
+            </Kbd>
+          </button>
+          <AccountMenu
+            displayName={displayName}
+            container={header}
+            choices={accountChoices}
+            switchAccount={switchAccount}
+            renderSignOutError={renderSignOutError}
+          />
+        </header>
         <main id="main" tabIndex={-1} className="work-main">
           {!online && <Notice tone="warning">{c.offline}</Notice>}
           {children}
@@ -300,7 +372,7 @@ function Frame({
       </div>
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent
-          side="left"
+          side="inline-start"
           closeLabel={c.close}
           className="work-menu-sheet w-72"
         >
@@ -332,6 +404,15 @@ export interface WorkShellProps {
   displayName?: string;
   /** The service name, shown in the header and the mobile drawer. */
   brand: string;
+  /** What the app is for, shown under the workspace name in the sidebar. */
+  description?: string;
+  /**
+   * Further choices in the account menu, above the shortcuts setting, each
+   * group ending in a separator. They render only while the menu is open.
+   */
+  accountChoices?: ReactNode;
+  /** Offers switching account in the account menu where given. */
+  switchAccount?: SwitchAccountAction;
   /** The places this session can go, grouped by the dividers between them. */
   groups: NavGroup[];
   /** The place the current route stands for, or null off every place. */
@@ -350,6 +431,9 @@ export interface WorkShellProps {
 export function WorkShell({
   displayName,
   brand,
+  description,
+  accountChoices,
+  switchAccount,
   groups,
   current,
   route,
@@ -364,6 +448,9 @@ export function WorkShell({
         <Frame
           displayName={displayName}
           brand={brand}
+          description={description}
+          accountChoices={accountChoices}
+          switchAccount={switchAccount}
           groups={groups}
           current={current}
           route={route}

@@ -8,7 +8,7 @@ import {
 import type { RecordActionReference } from "@registrystack/app-runtime";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/blocks/lib/notice";
-import { useBlockContent } from "@/blocks/lib/content";
+import { ConfirmedReceipt, useBlockContent } from "@/blocks/lib/content";
 import { ErrorSummary } from "@/blocks/record/record-form";
 import { InputField } from "@/blocks/fields/input-field";
 import {
@@ -42,6 +42,7 @@ export function DecisionForm({
   reference,
   choices,
   primaryAction = null,
+  primaryReason,
   secondaryActions = [],
   hasActions,
   needsReason,
@@ -72,6 +73,11 @@ export function DecisionForm({
   choices: RecordActionReference[];
   /** Takes no reason and goes straight to the check step. */
   primaryAction?: RecordActionReference | null;
+  /**
+   * An optional reason the person may give with the primary action. The server
+   * decides what it accepts; the caller decides what to send with which action.
+   */
+  primaryReason?: { label: string; hint: string };
   /** Also straight to the check step, rendered as outline buttons. */
   secondaryActions?: RecordActionReference[];
   /** False renders the "no actions available" sentence. */
@@ -95,8 +101,8 @@ export function DecisionForm({
    * decision against a revision that is about to be overtaken.
    */
   refreshing: boolean;
-  /** The confirmed-outcome body text; the caller's own, since it may name what the decision changes. */
-  decidedBody: string;
+  /** Confirmed-outcome wording, optionally chosen from the action just sent. */
+  decidedBody: string | ((action: RecordActionReference | null) => string);
   /** True renders the choice unselectable, with its note explaining why. */
   choiceDisabled?: (action: RecordActionReference) => boolean;
   /** A sentence shown under one choice's label, naming why it is disabled. */
@@ -127,6 +133,7 @@ export function DecisionForm({
   const choiceRef = useRef<HTMLFieldSetElement>(null);
   const focusChoiceNext = useRef(false);
   const handledReceipt = useRef<string | null>(null);
+  const submittedAction = useRef<RecordActionReference | null>(null);
 
   // A reread mints fresh references for the same actions, so the choice
   // follows its action by name; one the item no longer offers is dropped.
@@ -150,6 +157,14 @@ export function DecisionForm({
   // 412 refusing the recovery retry leaves the uncertain attempt in charge.
   const staleConflict = task.staleConflict;
   const confirmed = task.confirmed;
+  const hasFeedback = Boolean(
+    task.pending ||
+    task.unknown ||
+    task.error ||
+    task.result ||
+    staleConflict ||
+    confirmed,
+  );
 
   // A server-side reason or answer refusal returns to the choice step with
   // the field error wired to the same element the summary links to.
@@ -223,6 +238,7 @@ export function DecisionForm({
 
   async function perform() {
     if (!current) return;
+    submittedAction.current = current;
     await submit(current, reason);
   }
 
@@ -231,8 +247,8 @@ export function DecisionForm({
       <h2>{title}</h2>
       <p className="muted">{hint}</p>
       {!task.unknown && header}
-      {!hasActions && <p>{c.noActions}</p>}
-      {checking && current ? (
+      {!hasActions && !hasFeedback && <p>{c.noActions}</p>}
+      {hasActions && checking && current ? (
         <div className="decision-confirm">
           <h2 ref={checkRef} tabIndex={-1}>
             {c.decisionCheckHeading}
@@ -241,7 +257,7 @@ export function DecisionForm({
           <p className="muted">{reference}</p>
           {checkDetails}
           <p>{describeAction(current)}</p>
-          {reasonRequired && reason.trim() && (
+          {(reasonRequired || primaryReason) && reason.trim() && (
             <blockquote>
               <p>{reason}</p>
             </blockquote>
@@ -265,7 +281,7 @@ export function DecisionForm({
             </Button>
           </div>
         </div>
-      ) : (
+      ) : hasActions ? (
         <form noValidate onSubmit={continueToCheck}>
           <ErrorSummary
             errors={{
@@ -313,6 +329,17 @@ export function DecisionForm({
                 ...errors,
                 ...(serverAnswerErrors ?? {}),
               })}
+            {primaryReason && !reasonRequired && (
+              <InputField
+                name="decision-reason"
+                label={primaryReason.label}
+                hint={primaryReason.hint}
+                value={reason}
+                multiline
+                onChange={setReason}
+                error={serverReasonError}
+              />
+            )}
             {reasonRequired && (
               <InputField
                 name="decision-reason"
@@ -345,7 +372,7 @@ export function DecisionForm({
             </div>
           </fieldset>
         </form>
-      )}
+      ) : null}
       {staleConflict ? (
         <Notice tone="warning" title={c.staleDecidedTitle}>
           <p>{c.staleDecidedBody}</p>
@@ -366,10 +393,12 @@ export function DecisionForm({
           <h2 ref={decidedRef} tabIndex={-1}>
             {c.decidedTitle}
           </h2>
-          <p>{decidedBody}</p>
-          <p className="reference">
-            {c.receipt}: <span className="font-mono">{confirmed.receipt}</span>
+          <p>
+            {typeof decidedBody === "function"
+              ? decidedBody(submittedAction.current)
+              : decidedBody}
           </p>
+          <ConfirmedReceipt receipt={confirmed.receipt} />
         </Notice>
       ) : (
         <CommandFeedback

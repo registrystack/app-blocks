@@ -2,7 +2,10 @@ import { useEffect, useRef } from "react";
 import type { FieldModel, JsonValue } from "@registrystack/app-runtime";
 import { FieldValue } from "@/blocks/fields/field-value";
 import { FieldControl } from "@/blocks/fields/field-control";
-import { useBlockContent } from "@/blocks/lib/content";
+import { FieldError } from "@/blocks/fields/input-field";
+import { useBlockContent, useLocale } from "@/blocks/lib/content";
+import { fill } from "@/blocks/lib/format";
+import { Button } from "@/components/ui/button";
 
 function fieldLabel(
   fields: readonly FieldModel[] | undefined,
@@ -13,23 +16,40 @@ function fieldLabel(
 
 /**
  * The errors a submitted form found, one link per field, under a generic
- * heading. Renders nothing while there are none; moves focus to itself each
- * time the errors change, so a screen reader announces the failure.
+ * heading. Renders nothing while there are none; moves focus to itself when
+ * errors first appear or the form explicitly reports another failed attempt.
+ * Removing an error while somebody corrects a field must not steal focus.
  */
 export function ErrorSummary({
   errors,
   fields,
+  focusRequest,
 }: {
   errors: Record<string, string>;
   /** Names each error's field; an error whose field is not listed shows its message alone. */
   fields?: readonly FieldModel[];
+  /** Change this value for each failed submit that should return focus to the summary. */
+  focusRequest?: string | number;
 }) {
   const c = useBlockContent(),
-    ref = useRef<HTMLDivElement>(null);
+    locale = useLocale(),
+    ref = useRef<HTMLDivElement>(null),
+    previousErrors = useRef<Record<string, string>>({}),
+    previousRequest = useRef(focusRequest);
   const errorSignature = JSON.stringify(errors);
   useEffect(() => {
-    if (Object.keys(errors).length) ref.current?.focus();
-  }, [errorSignature]);
+    const hasErrors = Object.keys(errors).length > 0;
+    const newOrChangedError = Object.entries(errors).some(
+      ([id, message]) => previousErrors.current[id] !== message,
+    );
+    const requestedAgain =
+      focusRequest !== undefined &&
+      !Object.is(previousRequest.current, focusRequest);
+    if (hasErrors && (newOrChangedError || requestedAgain))
+      ref.current?.focus();
+    previousErrors.current = { ...errors };
+    previousRequest.current = focusRequest;
+  }, [errorSignature, focusRequest]);
   if (!Object.keys(errors).length) return null;
   return (
     <div className="error-summary" role="alert" tabIndex={-1} ref={ref}>
@@ -45,7 +65,11 @@ export function ErrorSummary({
               }}
             >
               {fieldLabel(fields, id)
-                ? `${fieldLabel(fields, id)}: ${error}`
+                ? fill(
+                    c.labelled,
+                    { label: fieldLabel(fields, id)!, value: error },
+                    locale,
+                  )
                 : error}
             </a>
           </li>
@@ -81,6 +105,7 @@ export function RecordFormFields({
   onChange,
   optionLabel,
   preset,
+  anchored,
 }: {
   fields: readonly FieldModel[];
   values: Readonly<Record<string, JsonValue>>;
@@ -90,17 +115,63 @@ export function RecordFormFields({
   optionLabel: (field: FieldModel, code: string) => string;
   /** Values the form takes as given: each shows as read-only text and is never editable. */
   preset?: Readonly<Record<string, JsonValue>>;
+  /**
+   * Fields filled from elsewhere: each shows as read-only text, its value
+   * once read, with a note saying where the value comes from or why it has
+   * none, and a way to read it again where the read failed for a reason the
+   * record does not explain.
+   */
+  anchored?: Readonly<
+    Record<
+      string,
+      {
+        value?: JsonValue;
+        note: string;
+        retry?: { label: string; run: () => void };
+      }
+    >
+  >;
 }) {
   return (
     <div className="form-grid">
       {fields.map((field) => {
+        const anchor = anchored?.[field.id];
+        if (anchor)
+          return (
+            <div
+              className={`field ${errors[field.id] ? "field-error" : ""}`}
+              key={field.id}
+              id={field.id}
+              tabIndex={-1}
+            >
+              <p className="field-label">{field.label}</p>
+              {anchor.value !== undefined && (
+                <div className="field-value">
+                  <FieldValue field={field} value={anchor.value} />
+                </div>
+              )}
+              <p className="muted">{anchor.note}</p>
+              {anchor.retry && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={anchor.retry.run}
+                >
+                  {anchor.retry.label}
+                </Button>
+              )}
+              {errors[field.id] && (
+                <FieldError name={field.id} error={errors[field.id]!} />
+              )}
+            </div>
+          );
         if (preset && Object.hasOwn(preset, field.id))
           return (
             <div className="field" key={field.id}>
               <p className="field-label">{field.label}</p>
-              <p>
+              <div className="field-value">
                 <FieldValue field={field} value={preset[field.id]} />
-              </p>
+              </div>
             </div>
           );
         const sole = soleChoice(field);

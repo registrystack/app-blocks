@@ -1,8 +1,4 @@
-import type {
-  CaseworkPageStatus,
-  CaseworkPrincipal,
-  CaseworkWorkItem,
-} from "./types.js";
+import type { CaseworkPageStatus, CaseworkPrincipal } from "./types.js";
 
 export interface CaseworkStaffingPrincipal {
   /** Session-bound authority reference. The browser must return this unchanged. */
@@ -70,52 +66,27 @@ export type CaseworkStaffingAbsenceResult =
     }
   | { outcome: "unknown"; attemptId: string; supportReference?: string };
 
-export interface CaseworkStaffingActionReference {
-  ref: string;
-  name: "assign" | "delegate";
-}
-export interface CaseworkStaffingAssignCommand {
-  attemptId: string;
-  actionRef: string;
-  targetRef: string;
-  reason?: string;
-}
-export type CaseworkStaffingAssignResult =
-  | { outcome: "confirmed"; itemId: string; revision: string }
-  | { outcome: "unknown"; attemptId: string; supportReference?: string };
-
 export interface CaseworkStaffingCaseloadPreviewInput {
   fromRef: string;
   toRef: string;
   queue: string;
   reason: string;
-  /** Session-bound identity of the first preview page. Required for continuations. */
-  previewRef?: string;
-  cursor?: string;
-  limit?: string;
 }
-export interface CaseworkStaffingCaseloadSelection {
-  /** Binds this exact item revision to the preview movement in this session. */
-  ref: string;
-  item: CaseworkWorkItem;
-}
-export interface CaseworkStaffingCaseloadPreviewPage {
+/**
+ * The exact, revision-fenced set of review tasks a movement would take. Casework moves
+ * the set atomically when it is applied before `expiresAt`.
+ */
+export interface CaseworkStaffingCaseloadPreview {
+  /** Session-bound reference to the previewed set. The browser must return this unchanged. */
   previewRef: string;
-  items: CaseworkStaffingCaseloadSelection[];
-  nextCursor?: string;
-  status: CaseworkPageStatus;
+  taskCount: number;
+  expiresAt: string;
   queueLabel: string;
 }
 export interface CaseworkStaffingApplyCaseload {
   attemptId: string;
-  selectionRefs: string[];
-}
-export interface CaseworkStaffingCaseloadItemResult {
-  itemId: string;
-  result:
-    "moved" | "notVisible" | "notEligible" | "attemptInProgress" | "conflict";
-  revision?: string;
+  previewRef: string;
 }
 export type CaseworkStaffingApplyResult =
-  | { outcome: "confirmed"; items: CaseworkStaffingCaseloadItemResult[] }
+  | { outcome: "confirmed"; moved: number }
   | { outcome: "unknown"; attemptId: string; supportReference?: string };

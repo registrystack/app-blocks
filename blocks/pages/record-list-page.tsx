@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import type { EntityModel, RecordView } from "@registrystack/app-runtime";
-import { useAuthority, useRecords } from "@registrystack/app-runtime/react";
+import { useAuthority, useModel, useRecords } from "@registrystack/app-runtime/react";
 import { Button } from "@/components/ui/button";
 import { PageHeading } from "@/blocks/shell/page-heading";
 import { Loading } from "@/blocks/shell/loading";
@@ -12,6 +12,7 @@ import { LiveAnnouncer, useAnnouncement } from "@/blocks/shell/live-announcer";
 import { RecordCards, RecordPager } from "@/blocks/record/record-list";
 import { RecordFilterBar, RecordSearchForm } from "@/blocks/record/record-filters";
 import { RecordTable } from "@/blocks/record/record-table";
+import { useLocale } from "@/blocks/lib/content";
 import {
   createWords,
   listTitle,
@@ -22,6 +23,8 @@ import {
   listRoute,
   type ListQuery,
 } from "@/blocks/pages/record-route-query";
+import { FindRecordPage } from "@/blocks/pages/find-record-page";
+import { LandingStarts } from "@/blocks/pages/landing-starts";
 import { useRegisterRoutes } from "@/blocks/pages/register-routes";
 import {
   entityRoutes,
@@ -44,12 +47,31 @@ export function RecordListPage({ entity }: { entity?: string }) {
   const route = useRoute();
   return (
     <RecordEntityGate entity={entity}>
-      {(entities, model) => (
-        // A new query starts the list from its first page.
-        <RecordList key={route} entities={entities} entity={model} />
-      )}
+      {(entities, model) =>
+        !model.operations.list &&
+        (model.operations.get || model.operations.lookup) ? (
+          // Another record type's find page starts empty.
+          <FindRecord key={model.id} entities={entities} entity={model} />
+        ) : (
+          // A new query starts the list from its first page.
+          <RecordList key={route} entities={entities} entity={model} />
+        )
+      }
     </RecordEntityGate>
   );
+}
+
+/** A session that may read an entity's records but not list them finds one. */
+function FindRecord({
+  entities,
+  entity,
+}: {
+  entities: RegisterEntities;
+  entity: EntityModel;
+}) {
+  const routes = entityRoutes(useRegisterRoutes(), entities, entity.id);
+  if (!routes) return <UnavailableWrite />;
+  return <FindRecordPage entity={entity} recordRoute={routes.record} />;
 }
 
 function RecordList({
@@ -60,11 +82,17 @@ function RecordList({
   entity: EntityModel;
 }) {
   const pages = usePagesContent(),
+    locale = useLocale(),
     routes = entityRoutes(useRegisterRoutes(), entities, entity.id),
     session = useAuthority();
-  const holder = session.role === "holder";
+  const landing = useModel().data?.home;
+  const holder = session.holder;
   const ownEntity = entity.id === entities.record.id;
-  const applied = listQueryOf(splitRoute(useRoute()).query);
+  // The full route, query included, so a start opened here returns to the
+  // list as narrowed.
+  const here = useRoute();
+  const { query: asked } = splitRoute(here);
+  const applied = listQueryOf(asked);
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const cursor = cursors.at(-1);
   const searchFields = entity.list.search;
@@ -149,6 +177,7 @@ function RecordList({
                     ownEntity ? "createRecord" : "addRecord",
                     create.label,
                     entity.label,
+                    locale,
                   )}
                 </Button>
               )}
@@ -165,6 +194,17 @@ function RecordList({
           )
         }
       />
+      {landing?.entity === entity.id && landing.starts?.length ? (
+        <LandingStarts
+          entities={entities}
+          ids={landing.starts}
+          from={here}
+          shown={[
+            ...(create && routes ? [`#${routes.createRecord}`] : []),
+            ...governed.map((action) => action.href),
+          ]}
+        />
+      ) : null}
       <RecordFilterBar
         entity={entity}
         allLabel={pages.filterAll}
@@ -210,7 +250,7 @@ function RecordList({
                   .filter((field) => field.id !== entity.title)
                   .map((field) => field.id)}
                 titleOf={(record) =>
-                  recordTitle(entity, record) ?? entity.label
+                  recordTitle(entity, record, locale) ?? entity.label
                 }
                 recordHref={recordHref}
               />
@@ -221,7 +261,7 @@ function RecordList({
                 linkColumn={linkColumn}
                 records={query.data.items}
                 recordHref={recordHref}
-                viewLabel={(record) => recordTitle(entity, record) ?? record.id}
+                viewLabel={(record) => recordTitle(entity, record, locale) ?? record.id}
               />
             )}
             <RecordPager

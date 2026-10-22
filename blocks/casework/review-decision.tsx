@@ -6,6 +6,7 @@ import {
   reviewResultValues,
   type ReviewDecision,
   type ReviewJson,
+  type ReviewOutcome,
   type ReviewResultField,
   type ReviewResultPlan,
   type ReviewSettlement,
@@ -22,6 +23,7 @@ import {
   Notice,
   Unconfirmed,
 } from "@/blocks/casework/shared";
+import { useLocale } from "@/blocks/lib/content";
 import { fill } from "@/blocks/lib/format";
 
 /**
@@ -30,10 +32,8 @@ import { fill } from "@/blocks/lib/format";
  * with the caller; each panel here reads and writes on its own.
  */
 
-const decisionTypes: Record<
-  ReviewSettlement,
-  Exclude<ReviewDecision["type"], "approve">
-> = {
+const decisionTypes: Record<ReviewSettlement, ReviewDecision["type"]> = {
+  approved: "approve",
   rejected: "reject",
   changes_requested: "changes_requested",
   answered: "answer",
@@ -42,6 +42,7 @@ const decisionTypes: Record<
 function fieldId(key: string): string | null {
   if (key === "reason") return "review-reason";
   if (key === "outcome") return "review-outcome";
+  if (key === "publicReason") return "review-public-reason";
   if (key.startsWith("result.")) return `review-result-${key.slice(7)}`;
   return null;
 }
@@ -104,6 +105,36 @@ function ResultField({
 }
 
 /**
+ * The reason the requester will see, offered when the chosen outcome asks for
+ * or allows one. One line: Casework refuses line breaks in it.
+ */
+export function PublicReasonField({
+  outcome,
+  value,
+  onChange,
+  error,
+}: {
+  outcome: ReviewOutcome | undefined;
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+}) {
+  const c = useCaseworkContent();
+  if (!outcome || outcome.publicReason === "none") return null;
+  return (
+    <InputField
+      name="review-public-reason"
+      label={c.publicReason}
+      hint={c.publicReasonHint}
+      value={value}
+      required={outcome.publicReason === "required"}
+      onChange={onChange}
+      error={error}
+    />
+  );
+}
+
+/**
  * A task's decision: the outcome, its reason and result, and the note a
  * send-back or a rejection sends its requester. Fetches its own send-back
  * command from the task id, so the caller supplies only the task and how to
@@ -119,10 +150,12 @@ export function DecisionPanel({
   rereading: boolean;
 }) {
   const c = useCaseworkContent();
+  const locale = useLocale();
   const sendBack = useSendBack(task.taskId);
   const { decision, note } = sendBack;
   const [picked, setPicked] = useState("");
   const [reason, setReason] = useState("");
+  const [publicReason, setPublicReason] = useState("");
   const [requesterNote, setRequesterNote] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -141,7 +174,9 @@ export function DecisionPanel({
       setErrors(mapped);
       setWhole(
         rest.join(" ") ||
-          (Object.keys(mapped).length ? "" : state.refusal.message),
+          (Object.keys(mapped).length
+            ? ""
+            : state.refusal.message || c.caseworkRefusedTitle),
       );
     }
     // A refusal is read once, when it arrives: `state` is only ever replaced
@@ -150,32 +185,45 @@ export function DecisionPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.state === "refused" ? state : null]);
 
-  const offered: { id: string; label: string; plan?: ReviewResultPlan }[] = [
-    ...(task.policy.purpose === "approval"
-      ? [{ id: "approve", label: c.approve }]
-      : []),
-    ...task.policy.outcomes.map((outcome) => ({
-      id: outcome.id,
-      label: outcome.label,
-      plan: planReviewResult(task.policy, outcome.id, task.resultConstraints),
-    })),
-  ];
-  const blocked = offered.filter((option) => option.plan?.blocked);
-  const choices = offered.filter((option) => !option.plan?.blocked);
+  // Only an approval review may approve; its approved outcomes come first, and
+  // a single one is the kit's own approve choice.
+  const approvals = task.policy.outcomes.filter(
+    (outcome) => outcome.settlement === "approved",
+  );
+  const others = task.policy.outcomes.filter(
+    (outcome) => outcome.settlement !== "approved",
+  );
+  const offered: { id: string; label: string; plan: ReviewResultPlan }[] = [
+    ...(task.policy.purpose === "approval" ? approvals : []),
+    ...others,
+  ].map((outcome) => ({
+    id: outcome.id,
+    label:
+      outcome.settlement === "approved" && approvals.length === 1
+        ? c.approve
+        : outcome.label,
+    plan: planReviewResult(task.policy, outcome.id, task.resultConstraints),
+  }));
+  const blocked = offered.filter((option) => option.plan.blocked);
+  const choices = offered.filter((option) => !option.plan.blocked);
   // A choice a re-read withdrew or blocked no longer counts as chosen.
   const chosen = choices.some((option) => option.id === picked) ? picked : "";
   const plan = choices.find((option) => option.id === chosen)?.plan;
+  const approves = plan?.outcome.settlement === "approved";
   const reasonRequired = plan?.reasonRequired ?? false;
-  // A request sent back for changes carries a note its requester reads; a
-  // rejected one may carry one too, since the requester never reads the reason.
+  const publicReasonAsked = plan && plan.outcome.publicReason !== "none";
+  // A request sent back for changes carries a note its requester reads. A
+  // rejected one carries none: its requester reads the public reason, which the
+  // outcome may refuse, and a note would give the explanation it withholds.
   const sendsBack = plan?.outcome.settlement === "changes_requested";
-  const notesRequester = sendsBack || plan?.outcome.settlement === "rejected";
 
   function submit() {
     const found: Record<string, string> = {};
     if (!chosen) found["review-outcome"] = c.chooseOutcome;
     if (reasonRequired && !reason.trim())
       found["review-reason"] = c.reasonRequired;
+    if (plan?.outcome.publicReason === "required" && !publicReason.trim())
+      found["review-public-reason"] = c.publicReasonRequired;
     if (sendsBack && !requesterNote.trim())
       found["review-requester-note"] = c.requesterNoteRequired;
     let result: Record<string, ReviewJson> | undefined;
@@ -184,26 +232,32 @@ export function DecisionPanel({
       const given = Object.keys(captured).length > 0;
       if (plan.resultRequired || given) {
         for (const name of reviewResultMissing(plan, values))
-          found[`review-result-${name}`] = fill(c.resultMissing, {
-            field: name,
-          });
+          found[`review-result-${name}`] = fill(
+            c.resultMissing,
+            { field: name },
+            locale,
+          );
         result = captured;
       }
     }
     setErrors(found);
     setWhole("");
-    if (Object.keys(found).length) return;
-    // Only the approve choice has no plan; `chosen` is a current choice here.
-    const next: ReviewDecision = plan
-      ? {
-          type: decisionTypes[plan.outcome.settlement],
-          outcome: plan.outcome.id,
-          ...(reason.trim() ? { reason } : {}),
-          ...(result ? { result } : {}),
-        }
-      : { type: "approve" };
-    if (notesRequester && requesterNote.trim())
-      void sendBack.sendBack(task, next, requesterNote);
+    if (Object.keys(found).length || !plan) return;
+    const type = decisionTypes[plan.outcome.settlement];
+    const shared =
+      publicReasonAsked && publicReason.trim() ? { publicReason } : {};
+    // An approval records no private reason and no result.
+    const next: ReviewDecision =
+      type === "approve"
+        ? { type, outcome: plan.outcome.id, ...shared }
+        : {
+            type,
+            outcome: plan.outcome.id,
+            ...(reason.trim() ? { reason } : {}),
+            ...shared,
+            ...(result ? { result } : {}),
+          };
+    if (sendsBack) void sendBack.sendBack(task, next, requesterNote);
     else void decision.decide(task, next);
   }
 
@@ -287,10 +341,10 @@ export function DecisionPanel({
             )}
             {blocked.map((option) => (
               <p key={option.id} className="muted">
-                {fill(c.outcomeBlocked, { outcome: option.label })}
+                {fill(c.outcomeBlocked, { outcome: option.label }, locale)}
               </p>
             ))}
-            {plan && (
+            {plan && !approves && (
               <InputField
                 name="review-reason"
                 label={c.reason}
@@ -302,14 +356,20 @@ export function DecisionPanel({
                 error={errors["review-reason"]}
               />
             )}
-            {notesRequester && (
+            <PublicReasonField
+              outcome={plan?.outcome}
+              value={publicReason}
+              onChange={setPublicReason}
+              error={errors["review-public-reason"]}
+            />
+            {sendsBack && (
               <InputField
                 name="review-requester-note"
                 label={c.requesterNote}
                 hint={c.requesterNoteHint}
                 value={requesterNote}
                 multiline
-                required={sendsBack}
+                required
                 onChange={setRequesterNote}
                 error={errors["review-requester-note"]}
               />

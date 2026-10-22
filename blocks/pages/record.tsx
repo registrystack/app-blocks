@@ -14,7 +14,8 @@ import {
   type RecoveryReference,
 } from "@registrystack/app-runtime/react";
 import { Button } from "@/components/ui/button";
-import { useBlockContent } from "@/blocks/lib/content";
+import { useBlockContent, useLocale } from "@/blocks/lib/content";
+import { fillNodes } from "@/blocks/lib/format";
 import { Notice } from "@/blocks/lib/notice";
 import { ErrorPanel } from "@/blocks/shell/error-panel";
 import { Loading } from "@/blocks/shell/loading";
@@ -44,10 +45,23 @@ export interface RegisterEntities {
    * the records they change sees that request target none of them.
    */
   followedRequest?: EntityModel;
-  /** Every record entity the session reads, the register's own among them. */
+  /**
+   * Every record entity the model holds, the register's own among them. The
+   * staff nav offers the listable ones as places when the model names none.
+   */
   records?: readonly EntityModel[];
   /** Every request entity the model names, `request` and `followedRequest` among them. */
   requests?: readonly EntityModel[];
+}
+
+/** Whether a request starts from or patches a record of this entity. */
+function belongsToRecord(request: EntityModel, entity: string): boolean {
+  return (
+    request.request?.entry?.entity === entity ||
+    request.request?.targets.some(
+      (target) => target.entity === entity && target.operation === "patch",
+    ) === true
+  );
 }
 
 /** The record and request entities of a session model, or null when it has no record entity. */
@@ -56,9 +70,7 @@ export function registerEntities(
 ): RegisterEntities | null {
   const requests = entities.filter((entity) => entity.kind === "request");
   const targeted = (entity: EntityModel) =>
-    requests.find((request) =>
-      request.request?.targets.some((target) => target.entity === entity.id),
-    );
+    requests.find((request) => belongsToRecord(request, entity.id));
   const records = entities.filter((entity) => entity.kind === "record");
   const record = records.find(targeted) ?? records[0];
   if (!record) return null;
@@ -80,8 +92,35 @@ export function requestsTargeting(
 ): readonly EntityModel[] {
   const requests =
     entities.requests ?? (entities.request ? [entities.request] : []);
-  return requests.filter((request) =>
-    request.request?.targets.some((target) => target.entity === entity),
+  return requests.filter((request) => belongsToRecord(request, entity));
+}
+
+/** The request entities whose ordinary list this session may read. */
+export function listableRequests(
+  entities: RegisterEntities,
+): readonly EntityModel[] {
+  const requests =
+    entities.requests ?? (entities.request ? [entities.request] : []);
+  return requests.filter((request) => request.operations.list === true);
+}
+
+/** Request lists the app offers as standalone places; contextual-only lists keep their routes and authority. */
+export function navigationRequests(
+  entities: RegisterEntities,
+): readonly EntityModel[] {
+  return listableRequests(entities).filter(
+    (request) => request.navigation !== false,
+  );
+}
+
+/** The list that keeps the plain request route, else the first list served. */
+export function defaultListRequest(
+  entities: RegisterEntities,
+): EntityModel | undefined {
+  const requests = listableRequests(entities);
+  return (
+    requests.find((request) => request.id === entities.followedRequest?.id) ??
+    requests[0]
   );
 }
 
@@ -109,33 +148,9 @@ export function routedRequest(
   query: URLSearchParams,
 ): EntityModel | undefined {
   const named = query.get(REQUEST_PARAM);
-  return (
-    entities.requests?.find((request) => request.id === named) ??
-    entities.followedRequest
-  );
-}
-
-/**
- * The entities a work item reads under: the request entity it names, with
- * the record that request targets. An item that names no entity reads under
- * the session's request; one naming an entity the model lacks has no request.
- */
-export function workItemEntities(
-  entities: EntityModel[],
-  sourceEntity: string | undefined,
-): RegisterEntities | null {
-  const register = registerEntities(entities);
-  if (!register || sourceEntity === undefined) return register;
-  const request = entities.find(
-    (entity) => entity.kind === "request" && entity.id === sourceEntity,
-  );
-  const record =
-    entities.find(
-      (entity) =>
-        entity.kind === "record" &&
-        request?.request?.targets.some((target) => target.entity === entity.id),
-    ) ?? register.record;
-  return { ...register, record, request };
+  return named === null
+    ? entities.followedRequest
+    : entities.requests?.find((request) => request.id === named);
 }
 
 /** The session model's register entities; `entities` is null until read, or when absent. */
@@ -183,8 +198,7 @@ export function recordPath(
 ): string | null {
   if (
     entity === entities.followedRequest?.id ||
-    (entities.followedRequest &&
-      entities.requests?.some((request) => request.id === entity))
+    entities.requests?.some((request) => request.id === entity)
   )
     return requestRoute(entities, routes.request(id), entity);
   return entityRoutes(routes, entities, entity)?.record(id) ?? null;
@@ -223,28 +237,29 @@ export function RecordEntityGate({
   const register = useRecordEntity(entityId);
   const shell = useShellContent();
   if (register.isPending) return <Loading />;
-  if (register.error || !register.entities)
+  if (register.error)
     return (
       <ErrorPanel
         error={register.error}
         retry={() => void register.refetch()}
       />
     );
-  if (!register.entity)
+  // A model read in full that holds no record type the session reads.
+  if (!register.entities || !register.entity)
     return <ErrorPanel error={unavailableError(shell.unavailable)} />;
   return <>{children(register.entities, register.entity)}</>;
 }
 
 /**
- * The id of the record a request changes, when that record is one of the
- * register's and the host has not marked it unavailable; "" otherwise, so a
- * read of it stays disabled.
+ * The id of the readable record that gives a request its page context. A
+ * declared entry wins over an effect target because an Action may create a
+ * different record from the one where the request started.
  */
 export function readableTarget(
   entities: RegisterEntities,
   request: RequestView | undefined,
 ): string {
-  const target = request?.target;
+  const target = request?.entry ?? request?.target;
   return target &&
     target.entity === entities.record.id &&
     target.available !== false
@@ -272,12 +287,16 @@ export function fieldOf(
   return entity.fields.find((field) => field.id === id);
 }
 
-/** The words a record is named by: its title template or title field, or undefined when it has neither. */
+/**
+ * The words a record is named by: its title template or title field, or
+ * undefined when it has neither. A calendar date in it is written in `locale`.
+ */
 export function recordTitle(
   entity: EntityModel,
   record: RecordView,
+  locale: string,
 ): string | undefined {
-  return entityTitle(entity, (field) => record.values[field.id]);
+  return entityTitle(entity, (field) => record.values[field.id], locale);
 }
 
 /**
@@ -307,6 +326,10 @@ export function UnavailableWrite() {
 export interface RecordTaskState<Input> extends TaskFeedbackState {
   locked: boolean;
   fieldErrors: Readonly<Record<string, string>>;
+  /** The write was refused because the record changed since it was read. */
+  staleConflict?: boolean;
+  /** Clears the refusal so the same form can send again. */
+  reset?: () => void;
   submit: (input: Input) => Promise<unknown>;
 }
 
@@ -370,6 +393,7 @@ function PendingRecovery({
   const shell = useShellContent(),
     pages = usePagesContent(),
     block = useBlockContent(),
+    locale = useLocale(),
     routes = useRegisterRoutes(),
     register = useRegister();
   const outcome = useRecovery(reference, {
@@ -389,8 +413,14 @@ function PendingRecovery({
       </p>
       {outcome.reference && (
         <p className="reference">
-          {block.receipt}:{" "}
-          <span className="font-mono">{outcome.reference}</span>
+          {fillNodes(
+            block.labelled,
+            {
+              label: block.receipt,
+              value: <span className="font-mono">{outcome.reference}</span>,
+            },
+            locale,
+          )}
         </p>
       )}
       <div className="actions">

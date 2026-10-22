@@ -153,11 +153,13 @@ export function planReviewResult(
       label: outcomeId,
       settlement: "rejected" as const,
       reasonRequired: false,
+      publicReason: "none" as const,
       resultRequired: false,
     },
     reasonRequired: outcome?.reasonRequired ?? false,
     resultRequired: outcome?.resultRequired ?? false,
-    resultDeclared: schema !== null,
+    // An approval carries no result, whatever the kind declares.
+    resultDeclared: schema !== null && outcome?.settlement !== "approved",
   };
   if (!outcome)
     return {
@@ -166,7 +168,7 @@ export function planReviewResult(
       uncapturable: [],
       blocked: "outcome-not-declared",
     };
-  if (!schema)
+  if (!schema || !base.resultDeclared)
     return {
       ...base,
       fields: [],

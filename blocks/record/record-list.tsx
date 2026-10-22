@@ -2,6 +2,7 @@ import { ArrowRight, FileText } from "lucide-react";
 import type { EntityModel, RecordView } from "@registrystack/app-runtime";
 import { Button } from "@/components/ui/button";
 import { useBlockContent } from "@/blocks/lib/content";
+import { InPhrase } from "@/blocks/fields/values";
 import { RecordFacts } from "@/blocks/record/record-summary";
 
 /**
@@ -36,12 +37,14 @@ export function RecordCards({
           </div>
           <p className="eyebrow">{entity.label}</p>
           <h2>{titleOf(record)}</h2>
-          <RecordFacts
-            entity={entity}
-            record={record}
-            fields={fields}
-            compact
-          />
+          <InPhrase>
+            <RecordFacts
+              entity={entity}
+              record={record}
+              fields={fields}
+              compact
+            />
+          </InPhrase>
           <span className="text-link card-link">
             {c.viewRecord}
             <ArrowRight size={17} />

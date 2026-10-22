@@ -1,6 +1,10 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { Download, FileImage, FileText, Eye } from "lucide-react";
-import type { AttachmentFile, AttachmentSlot } from "@registrystack/app-runtime";
+import {
+  problemView,
+  type AttachmentFile,
+  type AttachmentSlot,
+} from "@registrystack/app-runtime";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -9,8 +13,12 @@ import {
   FieldError,
   FieldLabel,
 } from "@/components/ui/field";
-import { useBlockContent, type BlockContent } from "@/blocks/lib/content";
-import { fill, longDate } from "@/blocks/lib/format";
+import {
+  useBlockContent,
+  useLocale,
+  type BlockContent,
+} from "@/blocks/lib/content";
+import { fill, fillNodes, inSentence, longDate } from "@/blocks/lib/format";
 import { Notice } from "@/blocks/lib/notice";
 import {
   CommandFeedback,
@@ -49,6 +57,7 @@ export function SupportingDocuments({
   children?: ReactNode;
 }) {
   const c = useBlockContent();
+  const locale = useLocale();
   if (!slots?.length) return null;
   const required = slots.filter((slot) => slot.required);
   return (
@@ -56,11 +65,15 @@ export function SupportingDocuments({
       <h2 id="supporting-documents">{c.attachmentsHeading}</h2>
       {required.length > 0 && (
         <p role="status">
-          {fill(c.attachmentReadiness, {
-            ready: required.filter((slot) => slot.file?.status === "available")
-              .length,
-            total: required.length,
-          })}
+          {fill(
+            c.attachmentReadiness,
+            {
+              ready: required.filter((slot) => slot.file?.status === "available")
+                .length,
+              total: required.length,
+            },
+            locale,
+          )}
         </p>
       )}
       <div className="flex flex-col divide-y border-y">
@@ -76,7 +89,11 @@ export function SupportingDocuments({
 export interface SlotProps {
   slot: AttachmentSlot;
   readOnly: boolean;
+  /** Prevents starting a write against a record whose revision is refreshing. */
+  writesDisabled?: boolean;
   onPreview: (slot: AttachmentSlot, trigger: HTMLButtonElement) => void;
+  /** Reports whether this slot has an in-flight or unresolved write. */
+  onWritingChange?: (slot: string, writing: boolean) => void;
   slotLabel: (slot: string) => string;
   typeLabel: (contentType: string) => string;
   statusNote: (status: string) => string;
@@ -92,6 +109,7 @@ export interface SlotProps {
 export function SlotView({
   slot,
   readOnly,
+  writesDisabled = false,
   onPreview,
   upload,
   removal,
@@ -103,6 +121,7 @@ export function SlotView({
   typeLabel,
   statusNote,
   canPreview,
+  onWritingChange,
 }: SlotProps & {
   upload: UploadOutcome;
   removal: CommandOutcome & { reset: () => void };
@@ -112,7 +131,11 @@ export function SlotView({
   renderError: (error: Error) => ReactNode;
 }) {
   const c = useBlockContent();
+  const locale = useLocale();
   const [chosen, setChosen] = useState<File | null>(null);
+  // Keep the surrounding request locked until the command's cache refresh has
+  // completed. The command state itself becomes confirmed before that await.
+  const [dispatches, setDispatches] = useState(0);
   // Remounting the input is the only way to clear a file input's selection.
   const [inputKey, setInputKey] = useState(0);
   useEffect(() => {
@@ -122,25 +145,56 @@ export function SlotView({
   }, [upload.result]);
 
   const label = slotLabel(slot.slot);
-  const types = new Intl.ListFormat("en-GB", { type: "disjunction" }).format(
+  const types = new Intl.ListFormat(locale, { type: "disjunction" }).format(
     slot.contentTypes.map((type) => typeLabel(type)),
   );
   // The host checks both again; these only save sending a file it would refuse.
   const problem = !chosen
     ? null
     : !slot.contentTypes.includes(chosen.type)
-      ? fill(c.attachmentWrongType, { types })
+      ? fill(c.attachmentWrongType, { types }, locale)
       : chosen.size > slot.maximumBytes
-        ? fill(c.attachmentTooLarge, {
-            size: fileSize(chosen.size, c),
-            limit: fileSize(slot.maximumBytes, c),
-          })
+        ? fill(
+            c.attachmentTooLarge,
+            {
+              size: fileSize(chosen.size, c, locale),
+              limit: fileSize(slot.maximumBytes, c, locale),
+            },
+            locale,
+          )
         : null;
   const file = slot.file;
-  const busy = upload.pending || removal.pending;
+  const busy = dispatches > 0 || upload.pending || removal.pending;
   // An unresolved upload or removal holds the slot until it settles.
   const held = upload.unknown || removal.unknown;
+  const writing = busy || held;
   const inputId = `attachment-${slot.slot}`;
+
+  useEffect(() => {
+    onWritingChange?.(slot.slot, writing);
+  }, [onWritingChange, slot.slot, writing]);
+  useEffect(
+    () => () => onWritingChange?.(slot.slot, false),
+    [onWritingChange, slot.slot],
+  );
+
+  async function track<T>(command: () => Promise<T>): Promise<T> {
+    setDispatches((count) => count + 1);
+    try {
+      return await command();
+    } finally {
+      setDispatches((count) => Math.max(0, count - 1));
+    }
+  }
+
+  const trackedUpload = {
+    ...upload,
+    retry: () => track(upload.retry),
+  };
+  const trackedRemoval = {
+    ...removal,
+    retry: () => track(removal.retry),
+  };
 
   return (
     <div className="flex flex-col gap-3 py-3">
@@ -156,7 +210,7 @@ export function SlotView({
             {file ? (
               <>
                 {file.status !== "erased" && (
-                  <p className="m-0">{fileLine(file, c, typeLabel)}</p>
+                  <p className="m-0">{fileLine(file, c, locale, typeLabel)}</p>
                 )}
                 {file.status !== "available" && (
                   <p className="muted m-0">{statusNote(file.status)}</p>
@@ -177,7 +231,7 @@ export function SlotView({
               onClick={(event) => onPreview(slot, event.currentTarget)}
             >
               <Eye aria-hidden="true" />
-              {fill(c.documentView, { document: label.toLowerCase() })}
+              {fill(c.documentView, { document: inSentence(label, locale) }, locale)}
             </Button>
           )}
           {file?.status === "available" && (
@@ -186,16 +240,20 @@ export function SlotView({
               render={<a href={downloadHref} download />}
             >
               <Download />
-              {fill(c.attachmentDownload, { document: label.toLowerCase() })}
+              {fill(
+                c.attachmentDownload,
+                { document: inSentence(label, locale) },
+                locale,
+              )}
             </Button>
           )}
           {!readOnly && file && slot.removeRef && !upload.unknown && (
             <Button
               variant="outline"
-              disabled={busy || held}
+              disabled={writesDisabled || busy || held}
               onClick={() => {
                 upload.reset();
-                void remove(slot.removeRef!);
+                void track(() => remove(slot.removeRef!));
               }}
             >
               {c.attachmentRemove}
@@ -208,9 +266,9 @@ export function SlotView({
           className="flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!chosen || problem || !slot.uploadRef) return;
+            if (writesDisabled || !chosen || problem || !slot.uploadRef) return;
             removal.reset();
-            void upload.upload(slot.uploadRef, chosen);
+            void track(() => upload.upload(slot.uploadRef!, chosen));
           }}
         >
           <Field data-invalid={problem ? true : undefined}>
@@ -233,10 +291,14 @@ export function SlotView({
               }
             />
             <FieldDescription id={`${inputId}-hint`}>
-              {fill(c.attachmentAllowed, {
-                types,
-                size: fileSize(slot.maximumBytes, c),
-              })}
+              {fill(
+                c.attachmentAllowed,
+                {
+                  types,
+                  size: fileSize(slot.maximumBytes, c, locale),
+                },
+                locale,
+              )}
             </FieldDescription>
             {problem && (
               <FieldError id={`${inputId}-problem`}>{problem}</FieldError>
@@ -249,15 +311,16 @@ export function SlotView({
                 {
                   name: chosen.name,
                   type: typeLabel(chosen.type),
-                  size: fileSize(chosen.size, c),
+                  size: fileSize(chosen.size, c, locale),
                 },
+                locale,
               )}
             </p>
           )}
           <div className="actions">
             <Button
               type="submit"
-              disabled={!chosen || !!problem || busy || held}
+              disabled={writesDisabled || !chosen || !!problem || busy || held}
             >
               {file ? c.attachmentReplace : c.attachmentUpload}
             </Button>
@@ -265,12 +328,12 @@ export function SlotView({
         </form>
       )}
       <UploadFeedback
-        upload={upload}
+        upload={trackedUpload}
         reconcileHref={reconcileHref}
         renderError={renderError}
       />
       <CommandFeedback
-        task={removal}
+        task={trackedRemoval}
         reconcileHref={reconcileHref}
         renderError={renderError}
       />
@@ -293,10 +356,31 @@ function UploadFeedback({
   renderError: (error: Error) => ReactNode;
 }) {
   const c = useBlockContent();
+  const locale = useLocale();
+  const viewedCode = problemView(upload.error).code;
+  // An adopter may bundle its transport separately from these blocks, making
+  // its HostError a different class instance. Read only the typed problem code
+  // in that case; the copy below remains maintained page content.
+  const carriedCode = (upload.error as { problem?: { code?: unknown } } | null)
+    ?.problem?.code;
+  const code =
+    viewedCode ?? (typeof carriedCode === "string" ? carriedCode : null);
+  const localRefusal =
+    code === "attachment.empty"
+      ? c.attachmentEmpty
+      : code === "attachment.content"
+        ? c.attachmentContentMismatch
+        : null;
   if (upload.notRetained)
     return (
       <Notice tone="warning" title={c.attachmentNotRetainedTitle}>
         <p>{c.attachmentNotRetained}</p>
+      </Notice>
+    );
+  if (localRefusal)
+    return (
+      <Notice tone="warning" title={c.attachmentNotRetainedTitle}>
+        <p>{localRefusal}</p>
       </Notice>
     );
   const stopWaiting = (
@@ -309,7 +393,14 @@ function UploadFeedback({
       <Notice tone="warning" title={c.unknownTitle}>
         <p>{c.attachmentFileLost}</p>
         <p className="reference">
-          {c.receipt}: <span className="font-mono">{upload.reference}</span>
+          {fillNodes(
+            c.labelled,
+            {
+              label: c.receipt,
+              value: <span className="font-mono">{upload.reference}</span>,
+            },
+            locale,
+          )}
         </p>
         <div className="actions">
           <Button render={<a href={reconcileHref} />} variant="outline">
@@ -333,30 +424,43 @@ function UploadFeedback({
   );
 }
 
-/** What is in the slot, in the caller's words: kind, size and when it came. */
+/**
+ * What is in the slot, in the caller's words and written in `locale`: kind,
+ * size and when it came.
+ */
 function fileLine(
   file: AttachmentFile,
   c: BlockContent,
+  locale: string,
   typeLabel: (contentType: string) => string,
 ): string {
   const type = typeLabel(file.contentType);
-  const size = fileSize(file.byteSize, c);
-  const date = file.uploadedAt ? longDate(file.uploadedAt) : null;
+  const size = fileSize(file.byteSize, c, locale);
+  const date = file.uploadedAt ? longDate(file.uploadedAt, locale) : null;
   return date
-    ? fill(c.attachmentFileLine, { type, size, date })
-    : fill(c.attachmentFileLineUndated, { type, size });
+    ? fill(c.attachmentFileLine, { type, size, date }, locale)
+    : fill(c.attachmentFileLineUndated, { type, size }, locale);
 }
 
-/** Whole kilobytes below a megabyte, megabytes to one decimal place above. */
-function fileSize(bytes: number, c: BlockContent): string {
+/**
+ * Whole kilobytes below a megabyte, megabytes to one decimal place above,
+ * written in `locale`.
+ */
+function fileSize(bytes: number, c: BlockContent, locale: string): string {
   const megabyte = 1024 * 1024;
   if (bytes < megabyte)
-    return fill(c.fileSizeKilobytes, {
-      size: Math.max(1, Math.round(bytes / 1024)),
-    });
-  return fill(c.fileSizeMegabytes, {
-    size: new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 }).format(
-      bytes / megabyte,
-    ),
-  });
+    return fill(
+      c.fileSizeKilobytes,
+      { size: Math.max(1, Math.round(bytes / 1024)) },
+      locale,
+    );
+  return fill(
+    c.fileSizeMegabytes,
+    {
+      size: new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(
+        bytes / megabyte,
+      ),
+    },
+    locale,
+  );
 }

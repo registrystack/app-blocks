@@ -17,6 +17,7 @@ export interface Refusal {
   status: number;
   code: string;
   kind: RefusalKind;
+  /** The host's own wording; empty when the runtime wrote it. */
   message: string;
   fields: Record<string, string>;
   supportReference?: string;
@@ -27,11 +28,7 @@ export interface RefusalDecision {
   settlesOriginal: boolean;
 }
 
-const heldElsewhere = new Set([
-  "review.task-not-held",
-  "work-item.already-claimed",
-  "work-item.not-holder",
-]);
+const heldElsewhere = new Set(["review.task-not-held"]);
 const keyReused = new Set([
   "idempotency.key-reused",
   "attempt.conflict",
@@ -86,7 +83,7 @@ export function classifyRefusal(
       status: error.status,
       code: error.problem.code,
       kind,
-      message: error.problem.message,
+      message: error.local ? "" : error.problem.message,
       fields,
       ...(error.problem.supportReference
         ? { supportReference: error.problem.supportReference }
@@ -97,8 +94,6 @@ export function classifyRefusal(
 }
 
 export const commandMarkerKey = "registry-app-kit.commands";
-const legacyTaskKey = "registry-app-kit.pending";
-const legacyCaseworkKey = "registry-app-kit.casework-pending";
 
 /**
  * What one pending write is on: a record of a registry entity, or, for a write outside the
@@ -369,42 +364,6 @@ export class CommandMarkers {
     );
     if (kept.length !== markers.length) this.write(kept);
   }
-  /** Moves the legacy Casework item markers into this store, bound to their recovery context. */
-  migrateCaseworkMarkers(scope: string): void {
-    const storage = this.storageOrUndefined();
-    const raw = this.getItem(storage, legacyCaseworkKey);
-    if (raw === null) return;
-    let legacy: unknown = [];
-    try {
-      legacy = JSON.parse(raw);
-    } catch {
-      legacy = [];
-    }
-    const markers = this.read();
-    for (const entry of Array.isArray(legacy) ? legacy : []) {
-      const v = entry as Record<string, unknown>;
-      if (
-        !isText(v?.itemId) ||
-        !isText(v.attemptId) ||
-        !isText(v.operation) ||
-        !isText(v.context)
-      )
-        continue;
-      markers.push({
-        v: 2,
-        key: this.newKey(),
-        authority: "",
-        recoveryContext: v.context,
-        scope,
-        target: { entity: scope, id: v.itemId },
-        operation: v.operation,
-        attemptId: v.attemptId,
-        createdAt: this.now(),
-      });
-    }
-    this.write(markers);
-    this.removeItem(storage, legacyCaseworkKey);
-  }
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -424,18 +383,10 @@ export class CommandMarkers {
       return null;
     }
   }
-  private removeItem(storage: Storage | undefined, key: string): void {
-    try {
-      storage?.removeItem(key);
-    } catch {
-      this.durable = false;
-    }
-  }
   private read(): StoredMarker[] {
     const storage = this.storageOrUndefined();
     if (!this.migrated) {
       this.migrated = true;
-      this.migrateTaskMarker(storage);
       this.upgradeMarkers(storage);
     }
     if (!storage || !this.durable) return [...this.memory];
@@ -456,39 +407,6 @@ export class CommandMarkers {
       stored.some((entry) => (entry as { v?: unknown } | null)?.v === 1)
     )
       this.write(parseList(raw), false);
-  }
-  private migrateTaskMarker(storage: Storage | undefined): void {
-    const raw = this.getItem(storage, legacyTaskKey);
-    if (raw === null) return;
-    let legacy: Record<string, unknown> = {};
-    try {
-      legacy = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      legacy = {};
-    }
-    const markers = parseList(this.getItem(storage, commandMarkerKey));
-    const createdAt = this.now();
-    if (legacy?.unresolved === true)
-      markers.push({
-        v: 2,
-        key: this.newKey(),
-        withoutAuthority: true,
-        scope: "task",
-        createdAt,
-      });
-    else if (isText(legacy?.scope) && isText(legacy.attemptId))
-      markers.push({
-        v: 2,
-        key: this.newKey(),
-        authority: legacy.scope,
-        scope: "task",
-        target: { entity: "task", id: legacy.attemptId },
-        operation: "submit",
-        attemptId: legacy.attemptId,
-        createdAt,
-      });
-    this.write(markers, false);
-    this.removeItem(storage, legacyTaskKey);
   }
   private write(markers: StoredMarker[], notify = true): void {
     this.memory = markers;

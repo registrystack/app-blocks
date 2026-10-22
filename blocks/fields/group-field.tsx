@@ -1,9 +1,12 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { FieldModel, JsonValue } from "@registrystack/app-runtime";
-import { useBlockContent } from "@/blocks/lib/content";
+import { blockContent, useBlockContent, useLocale } from "@/blocks/lib/content";
+import { fill } from "@/blocks/lib/format";
+import { ScrollRegion } from "@/blocks/lib/scroll-region";
 import { describedBy } from "@/blocks/fields/input-field";
 import { FieldControl } from "@/blocks/fields/field-control";
 import { FieldValue } from "@/blocks/fields/field-value";
+import { useInPhrase } from "@/blocks/fields/values";
 import type {
   FieldControlProps,
   FieldValueProps,
@@ -146,20 +149,55 @@ export function StructuredControl({
   );
 }
 
+const ValueScopeContext = createContext<string | undefined>(undefined);
+
+/**
+ * Names the side of a comparison the values inside belong to ("Current",
+ * "Proposed"), so two scroll regions for the same group on one page carry
+ * different labels.
+ */
+export function ValueScope({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <ValueScopeContext.Provider value={label}>
+      {children}
+    </ValueScopeContext.Provider>
+  );
+}
+
 /**
  * A repeatable group's items, as a table with one column per sub-field. Each
  * cell reads through that sub-field's own renderer, so a coded value shows
- * its label the same way a top-level field's does.
+ * its label the same way a top-level field's does. Inside a link or a line
+ * of text, which can hold no table or scroll region, it is the number of its
+ * items.
  */
 export function GroupValue({ field, value }: FieldValueProps) {
+  const c = useBlockContent();
+  const locale = useLocale();
   const items = asItems(value);
   const subs = field.items ?? [];
+  const scope = useContext(ValueScopeContext);
+  const inPhrase = useInPhrase();
+  if (inPhrase)
+    return (
+      <>
+        {fill(
+c.groupEntryCount ?? blockContent.groupEntryCount!,
+          { count: items.length },
+          locale,
+        )}
+      </>
+    );
   return (
-    <div
+    <ScrollRegion
       className="value-table-scroll"
-      role="region"
-      aria-label={field.label}
-      tabIndex={0}
+      label={scope ? `${field.label}, ${scope}` : field.label}
     >
       <table className="value-table group-value">
         <thead>
@@ -183,7 +221,7 @@ export function GroupValue({ field, value }: FieldValueProps) {
           ))}
         </tbody>
       </table>
-    </div>
+    </ScrollRegion>
   );
 }
 
@@ -207,6 +245,7 @@ export function GroupControl({
   error,
 }: FieldControlProps) {
   const c = useBlockContent();
+  const locale = useLocale();
   const [pendingFocus, setPendingFocus] = useState<string | null>(null);
   const items = asItems(value);
   const subs = field.items ?? [];
@@ -261,7 +300,11 @@ export function GroupControl({
       {items.map((item, index) => (
         <fieldset key={index} className="group-item">
           <legend>
-            {(c.groupItemLegend ?? ((n) => `Item ${n}`))(index + 1)}
+            {fill(
+              c.groupItemLegend ?? blockContent.groupItemLegend!,
+              { index: index + 1 },
+              locale,
+            )}
           </legend>
           <SubFieldControls
             subs={subs}
@@ -270,12 +313,16 @@ export function GroupControl({
             onChange={(subId, next) => updateItem(index, subId, next)}
           />
           <button type="button" onClick={() => removeItem(index)}>
-            {(c.removeGroupItem ?? ((n) => `Remove item ${n}`))(index + 1)}
+            {fill(
+              c.removeGroupItem ?? blockContent.removeGroupItem!,
+              { index: index + 1 },
+              locale,
+            )}
           </button>
         </fieldset>
       ))}
       <button type="button" id={addButtonId} onClick={addItem}>
-        {c.addGroupItem ?? "Add item"}
+        {c.addGroupItem ?? blockContent.addGroupItem}
       </button>
     </GroupFieldset>
   );

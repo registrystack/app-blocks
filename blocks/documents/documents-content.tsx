@@ -1,8 +1,8 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { useContentArea } from "@/blocks/lib/content";
 
 /**
  * The words the documents blocks show on their own: generic defaults an app
- * replaces with its own content through `DocumentsContentProvider`. Wording
+ * replaces with its own content through `ContentProvider`. Wording
  * shared by every role when reading evidence.
  */
 export interface DocumentsContent {
@@ -28,6 +28,8 @@ export interface DocumentsContent {
   selected: string;
   selectedReplacement: string;
   download: string;
+  /** The status line once a page has drawn: `{position}` is the page line, `{zoom}` the zoom as a percentage. */
+  previewStatus: string;
 }
 
 export const documentsContent: DocumentsContent = {
@@ -59,25 +61,9 @@ export const documentsContent: DocumentsContent = {
   selectedReplacement:
     "Selected: {name} ({type}, {size}). Choose Replace document to save it.",
   download: "Download {document}",
+  previewStatus: "{position}, {zoom}",
 };
 
-const DocumentsContentContext =
-  createContext<DocumentsContent>(documentsContent);
-
-export function DocumentsContentProvider({
-  content,
-  children,
-}: {
-  content: DocumentsContent;
-  children: ReactNode;
-}) {
-  return (
-    <DocumentsContentContext.Provider value={content}>
-      {children}
-    </DocumentsContentContext.Provider>
-  );
-}
-
 export function useDocumentsContent(): DocumentsContent {
-  return useContext(DocumentsContentContext);
+  return useContentArea("documents", documentsContent);
 }

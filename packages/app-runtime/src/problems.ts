@@ -4,7 +4,6 @@ import { caseworkProblemStatus, isCaseworkProblemCode } from "./types.js";
 
 /** What a failed read or write amounts to for the person looking at it. */
 export type ProblemKind =
-  | "recovery-pending"
   | "refused"
   | "contract-changed"
   | "session-ended"
@@ -32,8 +31,9 @@ export interface ProblemView {
  * the status its code stands for, and its message is page copy. Any other host answer is
  * read by its code first and its status after, and its message is not page copy, because
  * it can carry registry facts, unless the host marks it worded: a write the registry
- * refused, in its UI model's own words, which reads as refused. Anything that is not a
- * host answer is the service being unavailable.
+ * refused, in its UI model's own words, which reads as refused. A message the runtime
+ * wrote itself is never page copy, whatever the code. Anything that is not a host
+ * answer is the service being unavailable.
  */
 export function problemView(error: unknown): ProblemView {
   if (!(error instanceof HostError))
@@ -49,7 +49,7 @@ export function problemView(error: unknown): ProblemView {
     };
   const { code } = error.problem;
   const { status } = error;
-  const worded = error.problem.worded === true;
+  const worded = !error.local && error.problem.worded === true;
   const caseworkStatus = isCaseworkProblemCode(code)
     ? caseworkProblemStatus(code)
     : code.startsWith("casework.")
@@ -61,17 +61,16 @@ export function problemView(error: unknown): ProblemView {
       : caseworkStatus !== undefined
         ? caseworkKind(code, caseworkStatus)
         : hostKind(code, status),
-    casework: !worded && caseworkStatus !== undefined,
+    casework: !error.local && !worded && caseworkStatus !== undefined,
     worded,
     status,
     code,
-    message: error.message,
+    message: error.local ? null : error.message,
     fieldErrors: error.problem.fieldErrors ?? {},
     supportReference: error.problem.supportReference ?? null,
   };
 }
 function caseworkKind(code: string, status: number): ProblemKind {
-  if (code === "work-item.recovery-pending") return "recovery-pending";
   if (status === 403) return "refused";
   if (status === 404) return "unavailable";
   if (status === 412) return "stale";
@@ -83,6 +82,8 @@ function hostKind(code: string, status: number): ProblemKind {
   if (code === "action.refused" || status === 403) return "refused";
   if (code === "session.contract-changed") return "contract-changed";
   if (code === "session.expired" || status === 401) return "session-ended";
+  // A refused action guard is read as stale for its recovery, a reload; the
+  // panel words it as the action not being allowed, not as a change.
   if (code === "precondition.failed" || status === 412) return "stale";
   if (
     code === "action.conflict" ||
@@ -108,7 +109,8 @@ export interface TaskRefusal {
   validationErrors: Record<string, string>;
   /**
    * Whether the write itself was refused as stale, so the record moved on. A stale
-   * refusal of a resend leaves the unconfirmed attempt in charge instead.
+   * refusal of a resend leaves the unconfirmed attempt in charge instead, and a
+   * refused action guard is not one: the record did not move on.
    */
   staleConflict: boolean;
 }
@@ -122,6 +124,7 @@ export function taskRefusal(error: unknown, unknown: boolean): TaskRefusal {
       problem.status !== null &&
       !unknown &&
       !problem.worded &&
+      problem.code !== "action.guard_failed" &&
       (problem.code === "precondition.failed" || problem.status === 412),
   };
 }
@@ -130,6 +133,7 @@ export function taskRefusal(error: unknown, unknown: boolean): TaskRefusal {
 export type RefusalDetail =
   | "not-applied"
   | "initiator-excluded"
+  | "distinct-approver-required"
   | "not-retained"
   | "bytes-unavailable"
   | "outside-boundary"
@@ -137,6 +141,7 @@ export type RefusalDetail =
 const refusalDetails: Record<string, RefusalDetail> = {
   "command.not-applied": "not-applied",
   "review.initiator-excluded": "initiator-excluded",
+  "review.distinct-approver-required": "distinct-approver-required",
   "attachment.not-retained": "not-retained",
   "attachment.bytes-unavailable": "bytes-unavailable",
   "source-profile.required": "source-profile-required",
@@ -163,6 +168,15 @@ export function recordQueryRefusal(error: unknown): {
     cursorExpired: code === "page.expired" || code === "query.invalid",
     unsupported: code === "query.unsupported" || code === "query.invalid",
   };
+}
+
+/**
+ * Whether the service would not apply the filter a queue read asked for: the session
+ * may not use it, or the service does not read it.
+ */
+export function queueFilterRefused(error: unknown): boolean {
+  const { status } = problemView(error);
+  return status === 400 || status === 403;
 }
 
 /** Whether the service refused the session this read. */
@@ -192,9 +206,10 @@ export function taskRevokeFailure(
 }
 
 /**
- * Whether a failed read of an item's agent tasks withholds them from this officer: the
- * service refused the session or does not show them the item. Any other failure, a
- * service error or a lost connection, may pass and says nothing about the officer.
+ * Whether a failed read of a review task's agent tasks withholds them from this officer:
+ * the service refused the session or does not show them the review task. Any other
+ * failure, a service error or a lost connection, may pass and says nothing about the
+ * officer.
  */
 export function taskGrantsWithheld(error: unknown): boolean {
   return error instanceof HostError && [403, 404].includes(error.status);

@@ -9,10 +9,14 @@ import {
   ZoomOut,
 } from "lucide-react";
 import type { AttachmentFile } from "@registrystack/app-runtime";
-import { useDocumentBytes } from "@registrystack/app-runtime/react";
+import { useDocumentRead } from "@registrystack/app-runtime/react";
 import { Button } from "@/components/ui/button";
-import { fill } from "@/blocks/lib/format";
-import { useDocumentsContent } from "@/blocks/documents/documents-content";
+import { useLocale } from "@/blocks/lib/content";
+import { fill, inSentence } from "@/blocks/lib/format";
+import {
+  useDocumentsContent,
+  type DocumentsContent,
+} from "@/blocks/documents/documents-content";
 import {
   openImageDocument,
   type DocumentSource,
@@ -42,14 +46,15 @@ export function DocumentPreview({
   ) => Promise<DocumentSource>;
 }) {
   const copy = useDocumentsContent();
-  const readBytes = useDocumentBytes();
+  const locale = useLocale();
   const closeRef = useRef<HTMLButtonElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [source, setSource] = useState<DocumentSource | null>(null);
   const pdfWithoutViewer = file.contentType === "application/pdf" && !openPdf;
-  const [error, setError] = useState(pdfWithoutViewer);
-  const [attempt, setAttempt] = useState(0);
+  const read = useDocumentRead(href, file, !pdfWithoutViewer);
+  const [openFailed, setOpenFailed] = useState(false);
+  const error = pdfWithoutViewer || read.failed || openFailed;
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
@@ -62,20 +67,19 @@ export function DocumentPreview({
   }, []);
 
   useEffect(() => {
-    if (pdfWithoutViewer) return;
+    setSource(null);
+    setOpenFailed(false);
+    setPage(1);
+    if (!read.bytes) return;
+    const bytes = read.bytes;
     const controller = new AbortController();
     let document: DocumentSource | null = null;
     let current = true;
-    setSource(null);
-    setError(false);
-    setPage(1);
     const timeout = setTimeout(() => {
-      if (current) setError(true);
+      if (current) setOpenFailed(true);
       controller.abort();
     }, 30_000);
     async function open(): Promise<DocumentSource> {
-      const bytes = await readBytes(href, file, controller.signal);
-      controller.signal.throwIfAborted();
       if (file.contentType === "application/pdf")
         return openPdf!(bytes, controller.signal);
       return openImageDocument(bytes, file.contentType, controller.signal);
@@ -89,7 +93,7 @@ export function DocumentPreview({
       })
       .catch(() => {
         clearTimeout(timeout);
-        if (current) setError(true);
+        if (current) setOpenFailed(true);
       });
     return () => {
       current = false;
@@ -97,18 +101,9 @@ export function DocumentPreview({
       controller.abort();
       document?.destroy();
     };
-    // readBytes and openPdf are stable for the caller's purposes (a fresh
-    // closure each render that reads the same href, session and PDF module);
-    // only a change to the document itself, or an explicit retry, should
-    // restart this read.
-  }, [
-    href,
-    file.sha256,
-    file.byteSize,
-    file.contentType,
-    attempt,
-    pdfWithoutViewer,
-  ]);
+    // openPdf is stable for the caller's purposes (a fresh closure each render
+    // over the same PDF module); only new bytes should restart the open.
+  }, [read.bytes]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -129,9 +124,9 @@ export function DocumentPreview({
     const controller = new AbortController();
     let current = true;
     setRendered(false);
-    setError(false);
+    setOpenFailed(false);
     const timeout = setTimeout(() => {
-      if (current) setError(true);
+      if (current) setOpenFailed(true);
       controller.abort();
     }, 30_000);
     void source
@@ -141,7 +136,7 @@ export function DocumentPreview({
         setRendered(true);
       })
       .catch(() => {
-        if (current && !controller.signal.aborted) setError(true);
+        if (current && !controller.signal.aborted) setOpenFailed(true);
       })
       .finally(() => clearTimeout(timeout));
     return () => {
@@ -180,7 +175,7 @@ export function DocumentPreview({
     };
   }, [source, page, textOpen, pageText]);
 
-  const position = fill(copy.page, { page, count: source?.pages ?? 1 });
+  const position = fill(copy.page, { page, count: source?.pages ?? 1 }, locale);
   return (
     <section className="document-preview" aria-label={copy.previewHeading}>
       <div className="document-preview-heading">
@@ -264,7 +259,7 @@ export function DocumentPreview({
         </div>
         <Button variant="outline" render={<a href={href} download />}>
           <Download aria-hidden="true" />
-          {fill(copy.download, { document: label.toLowerCase() })}
+          {fill(copy.download, { document: inSentence(label, locale) }, locale)}
         </Button>
       </div>
       <p className="sr-only" role="status">
@@ -274,13 +269,13 @@ export function DocumentPreview({
             ? copy.loading
             : !rendered
               ? copy.rendering
-              : `${position}, ${Math.round(zoom * 100)}%`}
+              : previewStatusLine(copy, position, zoom, locale)}
       </p>
       {error && (
         <div className="document-preview-error" role="alert">
           <p>{copy.unavailable}</p>
           {!pdfWithoutViewer && (
-            <Button variant="outline" onClick={() => setAttempt(attempt + 1)}>
+            <Button variant="outline" onClick={read.retry}>
               {copy.retry}
             </Button>
           )}
@@ -291,7 +286,7 @@ export function DocumentPreview({
         className="document-viewport"
         tabIndex={0}
         role="region"
-        aria-label={fill(copy.image, { document: label, page })}
+        aria-label={fill(copy.image, { document: label, page }, locale)}
       >
         {!error && (!source || !rendered) && (
           <p className="document-loading">
@@ -299,7 +294,7 @@ export function DocumentPreview({
           </p>
         )}
         <canvas
-          key={`${page}-${rotation}-${zoom}-${width}-${attempt}`}
+          key={`${page}-${rotation}-${zoom}-${width}-${read.attempt}`}
           ref={canvasRef}
           aria-hidden="true"
           hidden={error || !rendered}
@@ -339,5 +334,22 @@ export function DocumentPreview({
         </details>
       )}
     </section>
+  );
+}
+
+/** The status line once a page has drawn: the page line and the zoom, as a whole percentage. */
+export function previewStatusLine(
+  copy: Pick<DocumentsContent, "previewStatus">,
+  position: string,
+  zoom: number,
+  locale: string,
+): string {
+  return fill(
+    copy.previewStatus,
+    {
+      position,
+      zoom: new Intl.NumberFormat(locale, { style: "percent" }).format(zoom),
+    },
+    locale,
   );
 }

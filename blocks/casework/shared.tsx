@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/blocks/lib/utils";
 import { fill, relativeDays, relativeSpan } from "@/blocks/lib/format";
-import { useBlockContent } from "@/blocks/lib/content";
+import { useBlockContent, useLocale } from "@/blocks/lib/content";
 import { useCaseworkContent, type CaseworkContent } from "@/blocks/casework/casework-content";
 
 /**
@@ -19,9 +19,8 @@ import { useCaseworkContent, type CaseworkContent } from "@/blocks/casework/case
 
 const unknownStatusCodes = new Set<string>();
 /**
- * A work item's or a review task's state, as a small coloured chip, worded by
- * the first of `labelKeys` the content labels (a work item's come from
- * `workItemStateKeys`), or by the state alone.
+ * A review task's state or a due state, as a small coloured chip, worded by
+ * the first of `labelKeys` the content labels, or by the state alone.
  */
 export function Badge({
   state,
@@ -77,12 +76,15 @@ export function Loading() {
   );
 }
 
-/** Full local date and time with the zone named, never a bare UTC instant. */
-export function caseworkDateTime(value: string) {
+/**
+ * Full local date and time with the zone named, never a bare UTC instant,
+ * written in `locale`.
+ */
+export function caseworkDateTime(value: string, locale: string) {
   const date = new Date(value);
   return Number.isNaN(date.valueOf())
     ? value
-    : new Intl.DateTimeFormat("en-GB", {
+    : new Intl.DateTimeFormat(locale, {
         day: "numeric",
         month: "long",
         year: "numeric",
@@ -127,6 +129,7 @@ export function caseworkLocalInstant(value: string): string | null {
 export function caseworkRelative(
   value: string,
   content: CaseworkContent,
+  locale: string,
   now = new Date(),
 ): string | null {
   const days = relativeDays(value, now);
@@ -135,19 +138,8 @@ export function caseworkRelative(
   if (days === 1) return content.relativeYesterday;
   if (days === -1) return content.relativeTomorrow;
   return days > 0
-    ? fill(content.relativeDaysAgo, { days })
-    : fill(content.relativeInDays, { days: -days });
-}
-/** A full date with its relative form beside it, as one phrase. */
-export function caseworkWhenPhrase(
-  value: string,
-  content: CaseworkContent,
-): string {
-  const relative = caseworkRelative(value, content);
-  const when = caseworkDateTime(value);
-  return relative
-    ? fill(content.caseworkHistoryWhen, { when, relative })
-    : when;
+    ? fill(content.relativeDaysAgo, { days }, locale)
+    : fill(content.relativeInDays, { days: -days }, locale);
 }
 /**
  * A moment as a list reads it: how late or how soon for a due date, how long
@@ -158,6 +150,7 @@ export function caseworkWhen(
   value: string,
   tense: "due" | "since",
   content: CaseworkContent,
+  locale: string,
   now = new Date(),
 ): { text: string; tone: "late" | "today" | null } | null {
   const span = relativeSpan(value, now);
@@ -166,7 +159,7 @@ export function caseworkWhen(
   if (tense === "due" || span.value < 0) {
     if (days > 0)
       return {
-        text: fill(content.whenLate, { days }),
+        text: fill(content.whenLate, { days }, locale),
         tone: tense === "due" ? "late" : null,
       };
     if (days === 0)
@@ -175,23 +168,23 @@ export function caseworkWhen(
         tone: tense === "due" ? "today" : null,
       };
     if (days === -1) return { text: content.whenTomorrow, tone: null };
-    return { text: fill(content.whenInDays, { days: -days }), tone: null };
+    return { text: fill(content.whenInDays, { days: -days }, locale), tone: null };
   }
   if (span.unit === "minute")
     return {
       text:
         span.value < 1
           ? content.whenJustNow
-          : fill(content.whenMinutesAgo, { minutes: span.value }),
+          : fill(content.whenMinutesAgo, { minutes: span.value }, locale),
       tone: null,
     };
   if (span.unit === "hour")
     return {
-      text: fill(content.whenHoursAgo, { hours: span.value }),
+      text: fill(content.whenHoursAgo, { hours: span.value }, locale),
       tone: null,
     };
   if (days === 1) return { text: content.whenYesterday, tone: null };
-  return { text: fill(content.whenDaysAgo, { days }), tone: null };
+  return { text: fill(content.whenDaysAgo, { days }, locale), tone: null };
 }
 /** The relative reading of a moment, with the absolute instant on hover. */
 export function CaseworkWhen({
@@ -207,13 +200,14 @@ export function CaseworkWhen({
   now?: Date;
 }) {
   const c = useCaseworkContent();
-  const when = value ? caseworkWhen(value, tense, c, now) : null;
+  const locale = useLocale();
+  const when = value ? caseworkWhen(value, tense, c, locale, now) : null;
   if (!value || !when)
     return <span className={cn("muted", className)}>{c.noDueDate}</span>;
   return (
     <time
       dateTime={value}
-      title={caseworkDateTime(value)}
+      title={caseworkDateTime(value, locale)}
       className={cn(
         "casework-when",
         when.tone && `casework-when-${when.tone}`,
@@ -245,24 +239,17 @@ export function caseworkShortName(
 export function caseworkWaiting(
   value: string,
   content: CaseworkContent,
+  locale: string,
   now = new Date(),
 ): string {
   const span = relativeSpan(value, now);
   // A clock running ahead of this device has not made the item wait.
   if (!span || span.value < 1) return content.waitingJustNow;
   if (span.unit === "minute")
-    return fill(
-      span.value === 1 ? content.waitingOneMinute : content.waitingMinutes,
-      { minutes: span.value },
-    );
+    return fill(content.waitingMinutes, { minutes: span.value }, locale);
   if (span.unit === "hour")
-    return fill(
-      span.value === 1 ? content.waitingOneHour : content.waitingHours,
-      { hours: span.value },
-    );
-  return fill(span.value === 1 ? content.waitingOneDay : content.waitingDays, {
-    days: span.value,
-  });
+    return fill(content.waitingHours, { hours: span.value }, locale);
+  return fill(content.waitingDays, { days: span.value }, locale);
 }
 /**
  * The human reference of the record the item concerns, never its UUID: the
@@ -330,12 +317,13 @@ export function caseworkHolder(
     holderPrincipal?: CaseworkPrincipal | null;
   },
   content: CaseworkContent,
+  locale: string,
 ) {
   const name = item.holderPrincipal
     ? caseworkPerson(item.holderPrincipal)
     : item.holder && caseworkSubjectTail(item.holder);
   if (!name) return content.unclaimed;
-  return item.heldByMe ? `${name} (${content.you})` : name;
+  return item.heldByMe ? fill(content.heldByYou, { name }, locale) : name;
 }
 /**
  * A person as an officer reads them: the line naming them, with the account
@@ -374,14 +362,15 @@ export function CaseworkDue({
   includeLabel?: boolean;
 }) {
   const c = useCaseworkContent();
-  const relative = dueAt ? caseworkRelative(dueAt, c) : null;
+  const locale = useLocale();
+  const relative = dueAt ? caseworkRelative(dueAt, c, locale) : null;
   return (
     <div className="casework-due">
       <p className="muted">
         {dueAt ? (
           <>
             {includeLabel && `${c.due}: `}
-            <time dateTime={dueAt}>{caseworkDateTime(dueAt)}</time>
+            <time dateTime={dueAt}>{caseworkDateTime(dueAt, locale)}</time>
             {relative && ` (${relative})`}
           </>
         ) : (
@@ -408,6 +397,10 @@ export function caseworkRefusalText(
   // A review stage that excludes its initiator refuses the officer who
   // submitted the request; someone else can still take the task.
   if (detail === "initiator-excluded") return content.initiatorExcluded;
+  // A review stage that takes each approval from a different reviewer refuses
+  // the officer who already reviewed it; someone else must give the approval.
+  if (detail === "distinct-approver-required")
+    return content.distinctApproverRequired;
   switch (refusal.kind) {
     case "held-elsewhere":
       return content.heldElsewhere;
@@ -420,7 +413,7 @@ export function caseworkRefusalText(
     case "key-reused":
       return content.keyReused;
     default:
-      return refusal.message;
+      return refusal.message || content.caseworkRefusedTitle;
   }
 }
 
@@ -493,14 +486,36 @@ export function Unconfirmed({
   );
 }
 
-/** A form's validation errors, linked to each field, focused when they first appear. */
-export function ErrorSummary({ errors }: { errors: Record<string, string> }) {
+/**
+ * A form's validation errors, linked to each field. Focuses when errors first
+ * appear or the form reports another failed attempt, never when one is removed.
+ */
+export function ErrorSummary({
+  errors,
+  focusRequest,
+}: {
+  errors: Record<string, string>;
+  /** Change this value for each failed submit that should return focus to the summary. */
+  focusRequest?: string | number;
+}) {
   const c = useCaseworkContent();
   const ref = useRef<HTMLDivElement>(null);
+  const previousErrors = useRef<Record<string, string>>({});
+  const previousRequest = useRef(focusRequest);
   const errorSignature = JSON.stringify(errors);
   useEffect(() => {
-    if (Object.keys(errors).length) ref.current?.focus();
-  }, [errorSignature]);
+    const hasErrors = Object.keys(errors).length > 0;
+    const newOrChangedError = Object.entries(errors).some(
+      ([id, message]) => previousErrors.current[id] !== message,
+    );
+    const requestedAgain =
+      focusRequest !== undefined &&
+      !Object.is(previousRequest.current, focusRequest);
+    if (hasErrors && (newOrChangedError || requestedAgain))
+      ref.current?.focus();
+    previousErrors.current = { ...errors };
+    previousRequest.current = focusRequest;
+  }, [errorSignature, focusRequest]);
   if (!Object.keys(errors).length) return null;
   return (
     <div className="error-summary" role="alert" tabIndex={-1} ref={ref}>
@@ -521,5 +536,70 @@ export function ErrorSummary({ errors }: { errors: Record<string, string> }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * Words for a proposal link BReg's client reports unavailable: the reason and
+ * the recovery it names, each in the content's own words. A reason or recovery
+ * the content has no words for is left out; with no reason at all the line is
+ * the plain "not available", never a guessed cause.
+ */
+export function unavailableText(
+  content: CaseworkContent,
+  availability: { reason: string; recovery: string },
+  locale: string,
+): string {
+  const reason = Object.hasOwn(content.unavailableReasons, availability.reason)
+    ? content.unavailableReasons[availability.reason]
+    : undefined;
+  if (reason === undefined) return content.unavailableNoReason;
+  const recovery = Object.hasOwn(
+    content.unavailableRecoveries,
+    availability.recovery,
+  )
+    ? content.unavailableRecoveries[availability.recovery]
+    : "";
+  return fill(content.unavailableLine, { reason, recovery }, locale).trim();
+}
+
+/** What a refused review handoff says: an administrator is sent to BReg's log, others to an administrator. */
+export function handoffRefusedText(
+  content: CaseworkContent,
+  administrator: boolean,
+): string {
+  return administrator
+    ? content.handoffRefusedAdministrator
+    : content.handoffRefusedOther;
+}
+
+/** A warning for a proposal link the client reports unavailable, worded from its reason and recovery. */
+export function UnavailableNotice({
+  reason,
+  recovery,
+}: {
+  reason: string;
+  recovery: string;
+}) {
+  const c = useCaseworkContent();
+  const locale = useLocale();
+  return (
+    <Notice tone="warning">
+      <p>{unavailableText(c, { reason, recovery }, locale)}</p>
+    </Notice>
+  );
+}
+
+/** A warning for a refused review handoff, worded by `handoffRefusedText`. */
+export function HandoffRefusedNotice({
+  administrator,
+}: {
+  administrator: boolean;
+}) {
+  const c = useCaseworkContent();
+  return (
+    <Notice tone="warning">
+      <p>{handoffRefusedText(c, administrator)}</p>
+    </Notice>
   );
 }

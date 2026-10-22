@@ -1,0 +1,1 @@
+import{Wt as e}from"./loading-iat2pJOC.js";import{t}from"./createLucideIcon-BkBvv9G2.js";var n={name:`arrow-left`,size:24,node:[[`path`,{d:`m12 19-7-7 7-7`,key:`1l729n`}],[`path`,{d:`M19 12H5`,key:`x3x0zl`}]]};n.node;var r=t(n),i=e();function a({href:e,children:t}){return(0,i.jsxs)(`a`,{className:`back-link`,href:`#${e}`,children:[(0,i.jsx)(r,{size:16}),t]})}export{a as t};

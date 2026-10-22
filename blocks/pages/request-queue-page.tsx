@@ -21,12 +21,15 @@ import {
 } from "@/blocks/pages/pages-content";
 import { useRegisterRoutes } from "@/blocks/pages/register-routes";
 import {
+  defaultListRequest,
+  listableRequests,
   recordPath,
   recordTitle,
   useRegister,
   type RegisterEntities,
 } from "@/blocks/pages/record";
 import {
+  DEFAULT_SIZE,
   QueueFilterBar,
   QueueFilterChips,
   QueuePager,
@@ -39,7 +42,8 @@ import {
   type QueueView,
 } from "@/blocks/lib/queue-parts";
 import { tabCursors, useTabCursors } from "@/blocks/lib/tab-memory";
-import { fill } from "@/blocks/lib/format";
+import { useBlockContent, useLocale } from "@/blocks/lib/content";
+import { fill, listOf } from "@/blocks/lib/format";
 
 /**
  * The request queue: a holder's own requests, or the full list a reviewer or
@@ -55,7 +59,23 @@ import { fill } from "@/blocks/lib/format";
  * cursor stack behind Previous, which must survive a URL this page writes
  * itself, cannot live in component state and lives here instead.
  */
-const queueCursors = tabCursors("request-queue.cursors");
+const queueCursors = (request: string) =>
+  tabCursors(`request-queue.cursors.${request}`);
+
+/** A queue view that keeps a non-default request kind in its query string. */
+function requestQueueView(
+  entities: RegisterEntities,
+  path: string,
+  request: string,
+  view: QueueView,
+): string {
+  const route = writeView(path, view);
+  if (defaultListRequest(entities)?.id === request) return route;
+  const split = splitRoute(route);
+  split.query.set("request", request);
+  const query = split.query.toString();
+  return `${split.path}${query ? `?${query}` : ""}`;
+}
 
 /** Derived, never stored: who must act before this request can progress. */
 function waitingOn(state: string, pages: PagesContent): string {
@@ -70,6 +90,7 @@ function waitingOn(state: string, pages: PagesContent): string {
 export function RequestQueuePage() {
   const register = useRegister();
   const shell = useShellContent();
+  const { query } = splitRoute(useRoute());
   if (register.isPending) return <Loading />;
   if (register.error)
     return (
@@ -79,11 +100,14 @@ export function RequestQueuePage() {
       />
     );
   const entities = register.entities;
-  if (!entities?.followedRequest)
+  const listed = entities ? listableRequests(entities) : [];
+  const named = query.get("request");
+  const request = named
+    ? listed.find((item) => item.id === named)
+    : entities && defaultListRequest(entities);
+  if (!entities || !request)
     return <ErrorPanel error={unavailableError(shell.unavailable)} />;
-  return (
-    <RequestQueue entities={entities} request={entities.followedRequest} />
-  );
+  return <RequestQueue entities={entities} request={request} />;
 }
 
 function RequestQueue({
@@ -95,9 +119,13 @@ function RequestQueue({
 }) {
   const shell = useShellContent();
   const pages = usePagesContent();
+  const block = useBlockContent();
+  const locale = useLocale();
   const routes = useRegisterRoutes();
   const session = useAuthority();
-  const writeQueueView = (next: QueueView) => writeView(routes.requests, next);
+  const listed = listableRequests(entities);
+  const writeQueueView = (next: QueueView) =>
+    requestQueueView(entities, routes.requests, request.id, next);
   // Parse once per render. No filter, size, cursor or page state is held in
   // React state alongside the URL; every change writes the hash, and the hash
   // alone decides what is fetched and rendered.
@@ -116,7 +144,7 @@ function RequestQueue({
         },
   );
 
-  const cursors = useTabCursors(queueCursors, view);
+  const cursors = useTabCursors(queueCursors(request.id), view);
   const previousEntry = cursors.previous;
 
   // A cursor the host no longer holds (a restarted session lost the cursor
@@ -137,9 +165,13 @@ function RequestQueue({
   useEffect(() => {
     if (query.data)
       announce(
-        fill(pages.resultCountAnnouncement, { count: query.data.items.length }),
+        fill(
+          pages.resultCountAnnouncement,
+          { count: query.data.items.length },
+          locale,
+        ),
       );
-  }, [query.data, announce, pages]);
+  }, [query.data, announce, pages, locale]);
 
   // The stage filter offers the states the model says the host can filter by,
   // never a hard-coded list, in the content's words where it has them. It
@@ -153,13 +185,13 @@ function RequestQueue({
   const start = (view.page - 1) * view.size + 1;
   // No total is available for this list, so the caption and the count line
   // never invent one.
-  const holder = session.role === "holder";
+  const holder = session.holder;
   const captionText = `${
     holder ? pages.holderQueueCaption : pages.queueCaption
   } ${pages.defaultOrderNote}`;
   // A list with nothing in it says why in the words of whoever reads it.
   const emptyList =
-    session.role === "reviewer"
+    session.decidesRequests
       ? { title: pages.queueEmptyTitle, body: pages.queueEmptyBody }
       : holder
         ? {
@@ -173,10 +205,16 @@ function RequestQueue({
       : [
           {
             name: "state",
-            label: `${pages.stageFilterLabel}: ${
-              stageOptions.find((option) => option.value === view.state)
-                ?.label ?? view.state
-            }`,
+            label: fill(
+              block.labelled,
+              {
+                label: pages.stageFilterLabel,
+                value:
+                  stageOptions.find((option) => option.value === view.state)
+                    ?.label ?? view.state,
+              },
+              locale,
+            ),
           },
         ];
 
@@ -210,7 +248,7 @@ function RequestQueue({
       header: pages.referenceColumn,
       rowHeader: true,
       cell: (record) => {
-        const named = recordTitle(request, record);
+        const named = recordTitle(request, record, locale);
         const title = named?.trim() ? named : pages.unnamedRequest;
         const path = recordPath(routes, entities, record.entity, record.id);
         return path ? (
@@ -243,7 +281,7 @@ function RequestQueue({
     <>
       <PageHeading
         title={
-          session.role === "reviewer"
+          session.decidesRequests
             ? pages.queueTitle
             : listTitle(
                 pages,
@@ -252,11 +290,32 @@ function RequestQueue({
               )
         }
         description={
-          session.role === "reviewer"
+          session.decidesRequests
             ? pages.queueDescription
             : pages.requestsDescription
         }
       />
+      {listed.length > 1 && (
+        <nav aria-label={pages.requestKindsLabel}>
+          <ul className="value-list">
+            {listed.map((item) => (
+              <li key={item.id}>
+                <a
+                  href={`#${requestQueueView(
+                    entities,
+                    routes.requests,
+                    item.id,
+                    { state: "", size: DEFAULT_SIZE, page: 1 },
+                  )}`}
+                  aria-current={item.id === request.id ? "page" : undefined}
+                >
+                  {item.pluralLabel}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
       <LiveAnnouncer message={announcement} />
       {stageOptions.length > 0 && (
         <QueueFilterBar
@@ -293,9 +352,16 @@ function RequestQueue({
       ) : items.length === 0 ? (
         activeFilters.length > 0 ? (
           <EmptyState
-            title={fill(pages.queueFilteredEmptyTitle, {
-              filters: activeFilters.map((filter) => filter.label).join(", "),
-            })}
+            title={fill(
+              pages.queueFilteredEmptyTitle,
+              {
+                filters: listOf(
+                  activeFilters.map((filter) => filter.label),
+                  locale,
+                ),
+              },
+              locale,
+            )}
           >
             {pages.queueFilteredEmptyBody}
           </EmptyState>

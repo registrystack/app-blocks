@@ -1,14 +1,112 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useMemo } from "react";
+
+/**
+ * The wording an app sets, by area. Each area's hook reads its own entry and
+ * falls back to its defaults; `ContentProvider` is the one place that fills
+ * this in.
+ */
+export const ContentContext = createContext<Record<string, unknown>>({});
+
+/**
+ * The texts the session's UI model sets for the kit's wording, by message id
+ * (`<area>.<key>`), in the session's language. They stand over the app's own
+ * wording; `ContentProvider` fills this in from the model.
+ */
+export const MessagesContext = createContext<Readonly<Record<string, string>>>(
+  {},
+);
+
+/**
+ * The locale blocks format dates, numbers and lists in: the session's language
+ * as `ModelMessages` sets it, else the kit's English, which is British English.
+ */
+export const LocaleContext = createContext("en-GB");
+
+/** The locale to pass a formatter, so its dates and numbers read like the words around them. */
+export function useLocale(): string {
+  return useContext(LocaleContext);
+}
+
+/**
+ * `node` with the text at `path` replaced, or added under a map of words
+ * (an object of words below the area's own), copying only the objects along
+ * the path. The rest of a path a map does not divide is one key, since the
+ * ids an app chooses, such as a file type, may hold dots.
+ */
+function withText(
+  node: unknown,
+  path: string[],
+  text: string,
+  depth = 0,
+): unknown {
+  if (!node || typeof node !== "object") return node;
+  const record = node as Record<string, unknown>;
+  const [key, ...rest] = path;
+  const child = record[key!];
+  if (rest.length && Object.hasOwn(record, key!) && typeof child === "object") {
+    const next = withText(child, rest, text, depth + 1);
+    return next === child ? node : { ...record, [key!]: next };
+  }
+  const whole = path.join(".");
+  const words =
+    depth > 0 &&
+    Object.values(record).every((value) => typeof value === "string");
+  if (
+    record[whole] === text ||
+    (Object.hasOwn(record, whole) ? typeof record[whole] !== "string" : !words)
+  )
+    return node;
+  return { ...record, [whole]: text };
+}
+
+/**
+ * An area's wording with the model's texts set over it. Only the ids under
+ * the area apply, and only to words that are text or to a key of a map of
+ * words; the wording given is not changed, and is returned as it is when no
+ * text applies.
+ */
+export function withMessages<T>(
+  area: string,
+  content: T,
+  messages: Readonly<Record<string, string>>,
+): T {
+  const prefix = `${area}.`;
+  return Object.entries(messages)
+    .filter(([id]) => id.startsWith(prefix))
+    .reduce(
+      (words, [id, text]) =>
+        withText(words, id.slice(prefix.length).split("."), text) as T,
+      content,
+    );
+}
+
+/** One area's wording from the nearest `ContentProvider`, else its `defaults`, under the model's texts. */
+export function useContentArea<T>(area: string, defaults: T): T {
+  const content = (useContext(ContentContext)[area] as T | undefined) ?? defaults;
+  const messages = useContext(MessagesContext);
+  return useMemo(
+    () => withMessages(area, content, messages),
+    [area, content, messages],
+  );
+}
 
 /**
  * The words blocks show on their own: generic defaults an app replaces with
- * its own content through `BlockContentProvider`.
+ * its own content through `ContentProvider`.
  */
 export interface BlockContent {
   notRecorded: string;
+  /** The heading that opens a quantity's unit scheme. */
+  quantityUnitStandard: string;
+  /** The heading that opens the full URI behind a value read as words. */
+  fullIdentifier: string;
   yes: string;
   no: string;
   notSupplied: string;
+  /** A label and its value read on one line, as in "Receipt: R-1". */
+  labelled: string;
+  /** `labelled` as a sentence of its own. */
+  labelledSentence: string;
   optional: string;
   selectOption: string;
   errorPrefix: string;
@@ -39,6 +137,17 @@ export interface BlockContent {
   fieldErrors: Readonly<Record<string, string>>;
   dateError: string;
   invalidError: string;
+  /** A decimal answer with more places than the registry keeps; `{places}` is how many it keeps. */
+  decimalPlacesError: string;
+  /** A decimal answer the registry keeps without places. */
+  wholeNumberError: string;
+  /** A number below its declared minimum, `{limit}`. */
+  minimumError: string;
+  /** A number above its declared maximum, `{limit}`. */
+  maximumError: string;
+  /** Coordinate labels for a CRS84 point, whose order is longitude then latitude. */
+  longitudeLabel: string;
+  latitudeLabel: string;
 
   // Request blocks: a command's outcome, a decision, a change comparison,
   // reviewer notes, verified prefill and supporting documents. Generic
@@ -50,6 +159,8 @@ export interface BlockContent {
   unknownBody: string;
   retryRefused: string;
   receipt: string;
+  /** Why a confirmed write keeps its exact registry reference. */
+  receiptHelp: string;
   exactRetry: string;
   reconcile: string;
   confirmed: string;
@@ -65,6 +176,19 @@ export interface BlockContent {
   staleDecidedTitle: string;
   staleDecidedBody: string;
   reloadRequest: string;
+  /** The comparison shown when a save is refused because the record changed since it was read. */
+  conflictTitle: string;
+  conflictBody: string;
+  conflictFieldColumn: string;
+  conflictStartedColumn: string;
+  conflictMineColumn: string;
+  conflictLatestColumn: string;
+  /** Said in words on a field both the person and the registry changed to different values. */
+  conflictBothChanged: string;
+  conflictKeepMine: string;
+  conflictTakeLatest: string;
+  conflictKept: string;
+  conflictTaken: string;
   decidedTitle: string;
   /** Announced to assistive technology once a decision is confirmed; the decision's own body text is the caller's, since it may name what the decision changes. */
   decisionAnnounced: string;
@@ -90,6 +214,16 @@ export interface BlockContent {
   prefillUncertain: string;
   prefillDenied: string;
   prefillExpired: string;
+  /**
+   * A verified answer's line: `{label}` is `prefillProposed` or
+   * `prefillVerified`, `{answer}` is yes or no, and `{source}` and `{date}`
+   * say who verified it and when.
+   */
+  prefillAnswerLine: string;
+  /** A draft's retained evidence: its answer, and when it was verified. */
+  prefillDraftLine: string;
+  /** A submitted request's retained evidence, under the `prefillVerified` heading. */
+  prefillSummaryLine: string;
   getVerifiedInformation: string;
   revisionNoNote: string;
   /** What an officer reads when the reviewer left the requester no note. */
@@ -110,6 +244,10 @@ export interface BlockContent {
   attachmentDownload: string;
   attachmentNotRetainedTitle: string;
   attachmentNotRetained: string;
+  /** Shown when an uploaded file is empty even though its declared type is accepted. */
+  attachmentEmpty: string;
+  /** Shown when an uploaded file's bytes do not match its declared type. */
+  attachmentContentMismatch: string;
   attachmentStopWaiting: string;
   attachmentFileLost: string;
   attachmentFileLine: string;
@@ -126,8 +264,12 @@ export interface BlockContent {
   // builds its BlockContent from its own content type may not carry these
   // yet, so the group control falls back to its own default wording.
   addGroupItem?: string;
-  removeGroupItem?: (index: number) => string;
-  groupItemLegend?: (index: number) => string;
+  /** `{index}`: the item's position, from 1. */
+  removeGroupItem?: string;
+  /** `{index}`: the item's position, from 1. */
+  groupItemLegend?: string;
+  /** A repeatable group read in a link or a line of text, by its `{count}` of items. */
+  groupEntryCount?: string;
   /**
    * Shown in place of a reference to a record that cannot be read or named.
    * Optional for the same reason; the reference value falls back to its own
@@ -143,17 +285,39 @@ export interface BlockContent {
   /** The first option of a reference picker that lists records to choose from. */
   referenceChoose?: string;
   /**
-   * Under a reference field whose records this session cannot list: the
-   * record's identifier is typed and the registry checks it.
+   * A record offered in a reference picker's list, by its `{title}` and the
+   * `{detail}` that tells it apart from records with the same title.
    */
-  referenceTyped?: string;
+  referenceOption?: string;
+  /** Loads the next authorized page of records in a reference picker. */
+  referenceMore?: string;
+  /** Restarts a paged reference picker at its authorized first page. */
+  referenceRestart?: string;
+  /** Finds one authorized record by an exact identifier. */
+  referenceFind?: string;
+  /** Explains that an exact lookup must succeed before its record can be chosen. */
+  referenceLookupHint?: string;
+  /** A neutral result for a missing, unreadable or refused exact record lookup. */
+  referenceLookupUnavailable?: string;
+  /** Names the identifier input of a reference picker that also offers lookup selectors. */
+  referenceIdentifier?: string;
+  /** Opens the identifier input of a reference picker that also offers lookup selectors, as a separate way in. */
+  referenceIdentifierOther?: string;
+  /** Sends a reference lookup again after the service did not answer it. */
+  referenceRetry?: string;
+  /** Shown when this session can neither list nor look up the target. */
+  referenceSelectionUnavailable?: string;
 }
 
 export const blockContent: BlockContent = {
   notRecorded: "Not recorded",
+  quantityUnitStandard: "Unit standard",
+  fullIdentifier: "Full identifier",
   yes: "Yes",
   no: "No",
   notSupplied: "Not supplied",
+  labelled: "{label}: {value}",
+  labelledSentence: "{label}: {value}.",
   optional: "optional",
   selectOption: "Choose an option",
   errorPrefix: "Error:",
@@ -175,6 +339,13 @@ export const blockContent: BlockContent = {
   fieldErrors: {},
   dateError: "Enter a valid date.",
   invalidError: "Enter a valid value.",
+  decimalPlacesError:
+    "Enter a number with no more than {places, plural, one {# decimal place} other {# decimal places}}.",
+  wholeNumberError: "Enter a whole number.",
+  minimumError: "Enter {limit} or more.",
+  maximumError: "Enter {limit} or less.",
+  longitudeLabel: "Longitude",
+  latitudeLabel: "Latitude",
 
   saving: "Sending…",
   unknownTitle: "We could not confirm the result",
@@ -183,6 +354,8 @@ export const blockContent: BlockContent = {
   retryRefused:
     "The service refused this retry. The earlier submission outcome is still not confirmed.",
   receipt: "Support reference",
+  receiptHelp:
+    "Keep this reference if you need help finding this change in the registry.",
   exactRetry: "Retry this exact submission",
   reconcile: "Check current records",
   confirmed: "Confirmed by the registry",
@@ -200,6 +373,18 @@ export const blockContent: BlockContent = {
   staleDecidedBody:
     "Another reviewer has recorded a decision. Check what changed, then reload this request.",
   reloadRequest: "Reload this request",
+  conflictTitle: "This record changed while you had it open",
+  conflictBody:
+    "Nothing was saved. Compare what you began with, what you entered and what the registry holds now, then choose which to keep. Your entry is not combined with the latest.",
+  conflictFieldColumn: "Field",
+  conflictStartedColumn: "What you began with",
+  conflictMineColumn: "What you entered",
+  conflictLatestColumn: "What it is now",
+  conflictBothChanged: "Changed by both",
+  conflictKeepMine: "Keep my entry",
+  conflictTakeLatest: "Take the latest",
+  conflictKept: "Your entry is kept. Save it again to send it against the latest version.",
+  conflictTaken: "The latest values replace your entry. Review them, then save.",
   decidedTitle: "Decision recorded",
   decisionAnnounced: "Your decision was recorded.",
   proposedHeading: "What is proposed",
@@ -229,6 +414,9 @@ export const blockContent: BlockContent = {
     "The provider could not release this information. Enter it yourself or attach a document.",
   prefillExpired:
     "This verified answer has expired. Request it again or enter your answer yourself.",
+  prefillAnswerLine: "{label}: {answer}. {source}, {date}.",
+  prefillDraftLine: "{label}: {answer}. {date}.",
+  prefillSummaryLine: "{answer}. {source}, {date}.",
   getVerifiedInformation: "Get verified information",
   revisionNoNote: "The reviewer did not leave a note for you.",
   requesterNoNote: "The reviewer did not leave a note for the requester.",
@@ -249,6 +437,9 @@ export const blockContent: BlockContent = {
   attachmentNotRetainedTitle: "The file was not sent",
   attachmentNotRetained:
     "This browser could not keep a copy of the file for an exact retry, so it was not sent. Free some browser storage or use another browser, then try again.",
+  attachmentEmpty: "This file is empty. Choose another file.",
+  attachmentContentMismatch:
+    "This file's contents do not match its type. Choose another file.",
   attachmentStopWaiting:
     "I have checked the documents; stop waiting for this upload",
   attachmentFileLost:
@@ -264,33 +455,40 @@ export const blockContent: BlockContent = {
     "Selected: {name} ({type}, {size}). Choose Replace document to save it.",
 
   addGroupItem: "Add item",
-  removeGroupItem: (index) => `Remove item ${index}`,
-  groupItemLegend: (index) => `Item ${index}`,
+  removeGroupItem: "Remove item {index}",
+  groupItemLegend: "Item {index}",
+  groupEntryCount: "{count, plural, one {# item} other {# items}}",
   referenceUnavailable: "A record that could not be read",
   referenceNoMatch: "No matching records",
   referenceLoadFailed: "The records could not be read",
   referenceChange: "Choose a different record",
   referenceChoose: "Choose a record",
-  referenceTyped:
-    "This account cannot list these records. Enter the identifier of the record; the registry checks it.",
+  referenceOption: "{title} ({detail})",
+  referenceMore: "Show more records",
+  referenceRestart: "Start choices again",
+  referenceFind: "Find record",
+  referenceLookupHint:
+    "Enter the record identifier, then find the record before choosing it.",
+  referenceLookupUnavailable: "No record is available for that identifier.",
+  referenceIdentifier: "Record identifier",
+  referenceIdentifierOther: "Or, if you have the record identifier",
+  referenceRetry: "Try again",
+  referenceSelectionUnavailable:
+    "No records are available to choose with this account.",
 };
 
-const BlockContentContext = createContext<BlockContent>(blockContent);
-
-export function BlockContentProvider({
-  content,
-  children,
-}: {
-  content: BlockContent;
-  children: ReactNode;
-}) {
-  return (
-    <BlockContentContext.Provider value={content}>
-      {children}
-    </BlockContentContext.Provider>
-  );
+export function useBlockContent(): BlockContent {
+  return useContentArea("block", blockContent);
 }
 
-export function useBlockContent(): BlockContent {
-  return useContext(BlockContentContext);
+/** A confirmed write's exact registry reference, kept as secondary support detail. */
+export function ConfirmedReceipt({ receipt }: { receipt: string }) {
+  const c = useBlockContent();
+  return (
+    <details className="reference">
+      <summary>{c.receipt}</summary>
+      <p>{c.receiptHelp}</p>
+      <p className="font-mono">{receipt}</p>
+    </details>
+  );
 }

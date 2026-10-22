@@ -4,8 +4,7 @@ const unknownStatusCodes = new Set<string>();
 
 /**
  * A record or task's status, worded from the content model by its code: by
- * the first of `labelKeys` the content labels (a work item's come from
- * `workItemStateKeys`), or by the code alone.
+ * the first of `labelKeys` the content labels, or by the code alone.
  */
 export function StatusBadge({
   state,
