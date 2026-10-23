@@ -1,0 +1,1 @@
+import{t as e}from"./record-list-page-BFp2Z-jl.js";export{e as RecordListPage};

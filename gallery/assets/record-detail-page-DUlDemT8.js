@@ -1,1 +1,0 @@
-import{t as e}from"./record-detail-page-DPH52bwY.js";export{e as RecordDetailPage};

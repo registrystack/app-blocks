@@ -18,7 +18,7 @@ import {
 } from "@registrystack/app-runtime/react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/blocks/lib/notice";
-import { fill, humanizeName, longDate } from "@/blocks/lib/format";
+import { fill, humanizeName, listOf, longDate } from "@/blocks/lib/format";
 import {
   useBlockContent,
   useLocale,
@@ -109,14 +109,28 @@ function stateDescription(
   return map[state] ?? pages.actionExplanation;
 }
 
+/**
+ * The sentence on a lifecycle action's check step. An apply names the fields
+ * it changes when every written field's current value is known; otherwise it
+ * keeps the general sentence.
+ */
 function actionDescription(
   name: string,
   pages: PagesContent,
   holder: boolean,
+  changes: readonly ChangeRow[],
+  locale: string,
 ): string {
+  const changed = changes
+    .filter((row) => row.comparison === "changed")
+    .map((row) => row.label);
+  const nameable =
+    changed.length > 0 && changes.every((row) => row.comparison !== "unknown");
   const map: Record<string, string> = {
     submit: holder ? pages.confirmSubmit : pages.staffConfirmSubmit,
-    apply: pages.confirmApply,
+    apply: nameable
+      ? fill(pages.confirmApplyFields, { fields: listOf(changed, locale) }, locale)
+      : pages.confirmApply,
     revise: pages.confirmRevision,
     rebase: pages.confirmRebase,
     cancel: pages.confirmCancel,
@@ -143,6 +157,22 @@ function choiceLabel(
 }
 
 /**
+ * The label of the button that opens an action's check step: the default
+ * wording for its lifecycle action, so it differs from the confirm button,
+ * which carries the action's own label. An action with no default opener
+ * opens the check by its own label.
+ */
+function openerLabel(
+  action: RecordActionReference,
+  pages: PagesContent,
+): string {
+  return (
+    pages.lifecycleOpenerLabels[action.action ?? action.name] ??
+    choiceLabel(action, pages)
+  );
+}
+
+/**
  * The target record's context fields that the request does not write: the
  * context an officer reads the change against. Without a declared context,
  * the record's list columns other than its title.
@@ -164,7 +194,8 @@ function contextFields(
  * The comparison rows for one request, one for each field it writes. Current
  * values come from the live target record, so before-values survive the
  * decision that removes the pending lifecycle action; the values the request
- * retained stand in only while the target is not marked unavailable.
+ * retained stand in only while the target is not marked unavailable. An
+ * applied request's come from the record's history.
  */
 function changeRows(
   record: EntityModel,
@@ -174,7 +205,14 @@ function changeRows(
   c: BlockContent,
 ): ChangeRow[] {
   const written = writtenFields({ record, request }, request.fields);
-  const rows = writtenChangeRows(written, view, target, c.currentUnavailable);
+  const rows = writtenChangeRows(
+    written,
+    view,
+    target,
+    view.request?.state === "applied"
+      ? c.beforeUnavailable
+      : c.currentUnavailable,
+  );
   if (target && written.length > 0)
     for (const field of contextFields(
       record,
@@ -234,9 +272,10 @@ const reviewResultPollMs = 5_000;
 const reviewResultPollCapMs = 60_000;
 
 /**
- * A submitted request is read again while it awaits a Casework result or while
- * BReg is automatically applying it, with or without a review, each wait twice
- * the last.
+ * A submitted request is read again while it awaits a Casework result, while
+ * a refusal waits for BReg to end the request as rejected, or while BReg is
+ * automatically applying it, with or without a review, each wait twice the
+ * last.
  */
 function awaitingReviewResult(
   view: RecordView | undefined,
@@ -247,8 +286,11 @@ function awaitingReviewResult(
   const automatic =
     application?.mode === "automatic" &&
     ["pending", "applying"].includes(application.state);
-  return request?.state === "submitted" &&
-    (request.review?.result.state === "pending" || automatic)
+  const waiting =
+    request?.state === "submitted" &&
+    ["pending", "rejected"].includes(request.review?.result.state ?? "");
+  return waiting ||
+    (automatic && ["submitted", "approved"].includes(request?.state ?? ""))
     ? backOffInterval(reviewResultPollMs, reviewResultPollCapMs, rereads)
     : false;
 }
@@ -585,7 +627,8 @@ function RequestDetail({
   // A send-back leaves the request submitted; its review result says so.
   const sentBack =
     state === "changes-requested" || result === "changesRequested";
-  const rejected = !sentBack && (state === "rejected" || result === "rejected");
+  // A refusal BReg has not yet ended as rejected is still being decided.
+  const rejected = !sentBack && state === "rejected";
   const publicReason = view.request?.review?.result.publicReason;
 
   const written = writtenFields({ record, request }, request.fields);
@@ -695,7 +738,7 @@ function RequestDetail({
       )}
       <PageHeading
         eyebrow={reference}
-        title={pages.requestTitle}
+        title={request.label}
         action={
           <StatusBadge
             state={approved ? "approved" : state}
@@ -735,8 +778,23 @@ function RequestDetail({
       )}
       {changes.length > 0 ? (
         <section>
-          <h2>{block.proposedHeading}</h2>
-          <ChangeTable rows={changes}>
+          <h2>
+            {state === "applied"
+              ? block.appliedChangesHeading
+              : block.proposedHeading}
+          </h2>
+          <ChangeTable
+            rows={changes}
+            labels={
+              state === "applied"
+                ? {
+                    caption: block.appliedChangesHeading,
+                    current: block.beforeColumn,
+                    proposed: block.afterColumn,
+                  }
+                : undefined
+            }
+          >
             {targetPath && !contextualBack && (
               <Button render={<a href={`#${targetPath}`} />} variant="outline">
                 {pages.viewRecordLink}
@@ -850,7 +908,13 @@ function RequestDetail({
           hasActions={hasActions}
           needsReason={() => false}
           describeAction={(action) =>
-            actionDescription(action.action ?? action.name, pages, holder)
+            actionDescription(
+              action.action ?? action.name,
+              pages,
+              holder,
+              changes,
+              locale,
+            )
           }
           checkDetails={
             target &&
@@ -903,6 +967,7 @@ function RequestDetail({
           refetch={refetch}
           announce={announce}
           choiceLabel={(action) => choiceLabel(action, pages)}
+          openerLabel={(action) => openerLabel(action, pages)}
           reconcileHref={`#${queuePath}`}
           renderError={(error) => <ErrorPanel error={error} />}
           refreshing={refreshing || writingAttachments.size > 0}

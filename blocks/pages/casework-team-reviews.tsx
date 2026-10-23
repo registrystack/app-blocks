@@ -83,6 +83,22 @@ function TeamRow({ row }: { row: SupervisoryReviewTask }) {
   );
 }
 
+/**
+ * The queues with reviews still waiting for a decision (open or held), in the
+ * order their first review appears, each with its count. Counts are only true
+ * of the whole list, so none is made from a page that is not all of it.
+ */
+function waitingByQueue(items: SupervisoryReviewTask[]) {
+  const counts = new Map<string, { label: string; count: number }>();
+  for (const row of items) {
+    if (row.state === "decided") continue;
+    const entry = counts.get(row.queue);
+    if (entry) entry.count += 1;
+    else counts.set(row.queue, { label: row.queueLabel, count: 1 });
+  }
+  return [...counts];
+}
+
 function TeamReviewsList() {
   const r = useReviewPageContent();
   const locale = useLocale();
@@ -94,8 +110,27 @@ function TeamReviewsList() {
   const items = read.data?.items ?? [];
   const nextCursor = read.data?.nextCursor;
   const partial = read.data !== undefined && read.data.status !== "complete";
+  const wholeList =
+    read.data !== undefined && !partial && !view.cursor && !nextCursor;
+  const waiting = wholeList ? waitingByQueue(items) : [];
   return (
     <>
+      {waiting.length > 0 && (
+        <div>
+          <p>{r.teamWaitingIntro}</p>
+          <ul>
+            {waiting.map(([queue, { label, count }]) => (
+              <li key={queue}>
+                <a
+                  href={`#/casework/reviews?${new URLSearchParams({ queue })}`}
+                >
+                  {fill(r.teamWaitingLine, { queue: label, count }, locale)}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {read.error ? (
         <ErrorPanel error={read.error} retry={() => void read.refetch()} />
       ) : !read.data ? (

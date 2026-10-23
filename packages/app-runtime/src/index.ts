@@ -73,6 +73,7 @@ export type {
   ReviewResultPlan,
 } from "./review-result.js";
 export {
+  reviewChangedFields,
   reviewChangedRequestValues,
   reviewShownValues,
   reviewSubjectEntity,
@@ -80,6 +81,7 @@ export {
   reviewSubjectTarget,
   reviewSubjectTitle,
 } from "./review-subject.js";
+export type { ReviewChangedField } from "./review-subject.js";
 export { reviewQueueColumns, reviewQueueFilters } from "./model.js";
 export type {
   CaseworkModel,
@@ -431,7 +433,10 @@ export class HostClient {
         this.clear();
         this.options.onSessionExpired?.();
       }
-      const body = data as Partial<HostProblem>;
+      // JSON that is not an object, such as null, carries no problem.
+      const body = (
+        typeof data === "object" && data !== null ? data : {}
+      ) as Partial<HostProblem>;
       throw new HostError(
         response.status,
         {

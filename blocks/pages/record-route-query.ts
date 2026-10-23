@@ -75,18 +75,23 @@ function inAppPath(path: string | null): string | null {
   return path && /^\/(?![/\\])/.test(path) ? path : null;
 }
 
-/** `path` with a preset, a return path and the page it is opened from in its query. */
+/**
+ * `path` with a preset, a return path and the page it is opened from in its
+ * query, after any query `path` already carries.
+ */
 export function formRoute(
   path: string,
   preset: Readonly<Record<string, string>>,
   returnPath: string | undefined,
   from?: string,
 ): string {
-  const query = new URLSearchParams();
+  const at = path.indexOf("?");
+  const base = at < 0 ? path : path.slice(0, at);
+  const query = new URLSearchParams(at < 0 ? "" : path.slice(at + 1));
   for (const [field, value] of Object.entries(preset))
     query.set(`${PRESET}${field}`, value);
   if (returnPath) query.set(RETURN, returnPath);
   if (from) query.set(BACK, from);
   const text = query.toString();
-  return text ? `${path}?${text}` : path;
+  return text ? `${base}?${text}` : base;
 }

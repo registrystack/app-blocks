@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   problemView,
+  type EntityModel,
   type FieldModel,
   type JsonValue,
   type RecordActionReference,
@@ -10,6 +11,7 @@ import {
   formValues,
   recordTask,
   useActionInputValues,
+  useRecord,
   useRecords,
   useStarts,
 } from "@registrystack/app-runtime/react";
@@ -32,6 +34,7 @@ import {
 import { TaskFeedback } from "@/blocks/pages/task-feedback";
 import {
   recordPath,
+  recordTitle,
   useOptionLabel,
   type RecordTaskState,
   type RegisterEntities,
@@ -126,6 +129,18 @@ function UnlistedStart({
   return <>{children(action)}</>;
 }
 
+/** The register's entity of this id, record or request, if it has one. */
+function entityOf(
+  entities: RegisterEntities,
+  id: string,
+): EntityModel | undefined {
+  return [
+    entities.record,
+    ...(entities.records ?? []),
+    ...(entities.requests ?? []),
+  ].find((entity) => entity.id === id);
+}
+
 /**
  * Where a confirmed write opens the record it wrote, from the receipt's own
  * record type: null where the session may not read that record type by id, so
@@ -136,14 +151,49 @@ export function readableRecordPath(
   entities: RegisterEntities,
   resource: { entity: string; id: string },
 ): string | null {
-  const known = [
-    entities.record,
-    ...(entities.records ?? []),
-    ...(entities.requests ?? []),
-  ].find((entity) => entity.id === resource.entity);
+  const known = entityOf(entities, resource.entity);
   return known?.operations.get
     ? recordPath(routes, entities, resource.entity, resource.id)
     : null;
+}
+
+/**
+ * A confirmed write's notice, whose button opens the record it wrote and names
+ * it by its title. The record is read once the write is confirmed; while it
+ * loads, when the read fails and when the record has no title, the button
+ * keeps the plain "View record".
+ */
+function WrittenRecordFeedback({
+  task,
+  entities,
+  written,
+  onOpen,
+}: {
+  task: RecordTaskState<RecordTask>;
+  entities: RegisterEntities | null;
+  written: { entity: string; id: string };
+  onOpen: () => void;
+}) {
+  const pages = usePagesContent(),
+    block = useBlockContent(),
+    locale = useLocale();
+  const entity = entities && entityOf(entities, written.entity);
+  const read = useRecord(entity ? written.entity : "", written.id);
+  const title =
+    entity && read.data ? recordTitle(entity, read.data, locale) : undefined;
+  return (
+    <TaskFeedback
+      task={task}
+      recordWrite
+      focusConfirmed
+      confirmedLabel={
+        title
+          ? fill(pages.viewRecordTitled, { title }, locale)
+          : block.viewRecord
+      }
+      onConfirmed={onOpen}
+    />
+  );
 }
 
 /** The answers every write form starts with for its inputs, before the app's own. */
@@ -321,6 +371,7 @@ export function ActionWriteForm({
   confirmedPath,
   anchorSources = {},
   anchorLabel = (field) => field.fillFrom!.field,
+  entities = null,
 }: {
   action: RecordActionReference;
   fields: readonly FieldModel[];
@@ -343,6 +394,8 @@ export function ActionWriteForm({
   anchorSources?: Record<string, string>;
   /** The words for the field an input is filled from. */
   anchorLabel?: (field: FieldModel) => string;
+  /** The register's entities, which name a written record by its title. */
+  entities?: RegisterEntities | null;
 }) {
   const pages = usePagesContent(),
     block = useBlockContent(),
@@ -382,37 +435,50 @@ export function ActionWriteForm({
       noValidate
       onSubmit={(e) => void submit(e)}
     >
-      <ErrorSummary
-        errors={{ ...errors, ...task.fieldErrors }}
-        fields={fields}
-        focusRequest={answers.errorFocusRequest}
-      />
-      <p className="muted">{pages.required}</p>
-      <fieldset disabled={task.locked}>
-        <RecordFormFields
-          fields={fields}
-          values={answers.values}
-          errors={{ ...task.fieldErrors, ...errors }}
-          onChange={answers.setValue}
-          optionLabel={word}
-          preset={preset}
-          anchored={anchors.shown}
+      {/* Once the server confirms, the answers are done: the notice and its next steps stand alone. */}
+      {!written && (
+        <>
+          <ErrorSummary
+            errors={{ ...errors, ...task.fieldErrors }}
+            fields={fields}
+            focusRequest={answers.errorFocusRequest}
+          />
+          <p className="muted">{pages.required}</p>
+          <fieldset disabled={task.locked}>
+            <RecordFormFields
+              fields={fields}
+              values={answers.values}
+              errors={{ ...task.fieldErrors, ...errors }}
+              onChange={answers.setValue}
+              optionLabel={word}
+              preset={preset}
+              anchored={anchors.shown}
+            />
+            <div className="actions">
+              <Button type="submit">{submitLabel}</Button>
+              <Button render={<a href={`#${cancelHref}`} />} variant="ghost">
+                {pages.cancel}
+              </Button>
+            </div>
+          </fieldset>
+        </>
+      )}
+      {written && opens && !returnPath ? (
+        <WrittenRecordFeedback
+          task={task}
+          entities={entities}
+          written={written}
+          onOpen={() => navigate(opens)}
         />
-        <div className="actions">
-          <Button type="submit">{submitLabel}</Button>
-          <Button render={<a href={`#${cancelHref}`} />} variant="ghost">
-            {pages.cancel}
-          </Button>
-        </div>
-      </fieldset>
-      <TaskFeedback
-        task={task}
-        recordWrite
-        confirmedLabel={
-          returnPath ? pages.continueAfterWrite : block.viewRecord
-        }
-        onConfirmed={opens ? () => navigate(opens) : undefined}
-      />
+      ) : (
+        <TaskFeedback
+          task={task}
+          recordWrite
+          focusConfirmed
+          confirmedLabel={pages.continueAfterWrite}
+          onConfirmed={opens ? () => navigate(opens) : undefined}
+        />
+      )}
       {written && !opens && (
         // The session cannot read what it wrote, so the registry's own
         // identifier is all it can keep; the form can be entered again.

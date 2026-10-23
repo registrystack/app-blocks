@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { ArrowRight } from "lucide-react";
 import { problemView } from "@registrystack/app-runtime";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ export function TaskFeedback({
   onConfirmed,
   confirmedLabel,
   recordWrite,
+  focusConfirmed,
 }: {
   task: TaskFeedbackState;
   /** Where "Check current records" points. */
@@ -49,10 +51,17 @@ export function TaskFeedback({
   confirmedLabel?: string;
   /** The task writes records, so a conflict is with the values it sent. */
   recordWrite?: boolean;
+  /** Moves focus to the confirmed notice's heading when the write is confirmed. */
+  focusConfirmed?: boolean;
 }) {
   const c = useBlockContent();
   const locale = useLocale();
   const result = task.result;
+  const confirmedHeading = useRef<HTMLHeadingElement>(null);
+  const confirmed = result?.outcome === "confirmed";
+  useEffect(() => {
+    if (focusConfirmed && confirmed) confirmedHeading.current?.focus();
+  }, [focusConfirmed, confirmed]);
   const problem = problemView(task.error);
   if (task.pending) return <Notice>{c.saving}</Notice>;
   if (task.unknown)
@@ -91,7 +100,10 @@ export function TaskFeedback({
     return <ErrorPanel error={task.error} recordWrite={recordWrite} />;
   if (result?.outcome === "confirmed")
     return (
-      <Notice tone="success" title={c.confirmed}>
+      <Notice tone="success">
+        <h2 ref={confirmedHeading} tabIndex={focusConfirmed ? -1 : undefined}>
+          {c.confirmed}
+        </h2>
         {onConfirmed && result.resource && (
           <Button onClick={() => onConfirmed(result.resource!.id)}>
             {confirmedLabel ?? c.openRequest}

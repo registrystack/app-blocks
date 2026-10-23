@@ -186,6 +186,22 @@ export interface CaseworkContent {
   outcomeBlocked: string;
   record: string;
   decided: string;
+  /** "It now waits for the next review stage: {stage}.": a confirmed decision after which the review moved on. */
+  nextStage: string;
+  /** The same, when the page cannot name the next stage. */
+  nextStageUnnamed: string;
+  /** "Approving sends it on to the next review stage: {stage}.": beside the outcomes, where approving leads from a stage one approval settles. */
+  approvesToStage: string;
+  /** The same, when the page cannot name the next stage. */
+  approvesToStageUnnamed: string;
+  /** The same at the policy's last stage, where approving settles the review. */
+  approvesSettles: string;
+  /** A confirmed decision that settled the review as approved. */
+  settledApproved: string;
+  /** A confirmed decision that settled the review as rejected. */
+  settledRejected: string;
+  /** A confirmed decision that sent the request back to be revised. */
+  sentBack: string;
   decisionUnconfirmed: string;
   retryDecision: string;
   decisionUnattributed: string;
@@ -273,13 +289,20 @@ export interface CaseworkContent {
   clocksHeading: string;
   clocksEmpty: string;
   /**
-   * "Deadline {number}": a deadline's name, by its place in the list. Casework
+   * "Deadline {number}": a deadline's name, by its place in the list, where the
+   * review page names none for its clock id (`howDeadlineNames`). Casework
    * serves no name for a clock, only its configuration id.
    */
   clockName: string;
+  /**
+   * "{name} ({stage})": a stage clock's name with the stage it runs for, so the
+   * same deadline in two stages reads apart. `{name}` is the deadline's name or
+   * `clockName` filled; `{stage}` the stage's name on the review page.
+   */
+  clockStageName: string;
   /** "{name}: {state}": a clock with no due time, `{name}` being `clockName` filled. */
   clockLine: string;
-  /** "{name}: {state} due {time}": a clock with a due time, `{name}` being `clockName` filled. */
+  /** "{name}: {state}, due {time}": a clock with a due time, `{name}` being `clockName` filled. */
   clockLineDue: string;
   /** Labels for a review clock's state, by its state code. */
   clockStates: Readonly<Record<string, string>>;
@@ -622,6 +645,16 @@ export const caseworkContent: Required<CaseworkContent> = {
     "{outcome} cannot be recorded here: the result it needs has a field this page cannot capture.",
   record: "Record decision",
   decided: "Decision recorded.",
+  nextStage: "It now waits for the next review stage: {stage}.",
+  nextStageUnnamed: "It now waits for the next review stage.",
+  approvesToStage: "Approving sends it on to the next review stage: {stage}.",
+  approvesToStageUnnamed: "Approving sends it on to the next review stage.",
+  approvesSettles:
+    "Approving completes the review and approves the request. The record changes only once the approved request is applied.",
+  settledApproved:
+    "The review is complete and the request is approved. The record changes only once the approved request is applied.",
+  settledRejected: "The review is complete. The request was rejected.",
+  sentBack: "The request was sent back for a revision.",
   decisionUnconfirmed:
     "The service could not confirm this decision. Retry sends the same decision again. Do not decide again until this is resolved.",
   retryDecision: "Retry the same decision",
@@ -642,7 +675,7 @@ export const caseworkContent: Required<CaseworkContent> = {
   requesterNoteUnconfirmed:
     "The decision was recorded. The service could not confirm the note to the requester. Retry sends the same note again.",
   retryRequesterNote: "Retry the same note to the requester",
-  draftHeading: "Your draft",
+  draftHeading: "Your draft (optional)",
   draftLabel: "Private draft",
   draftHint: "Only you see this draft. It is kept with the task.",
   saveDraft: "Save draft",
@@ -657,7 +690,7 @@ export const caseworkContent: Required<CaseworkContent> = {
   retryDraftDelete: "Retry the same deletion",
   taskNotApplied:
     "The task was read back and this change was not applied. You can try again.",
-  notesHeading: "Notes",
+  notesHeading: "Notes (optional)",
   noteLabel: "Note",
   audienceLegend: "Who the note is for",
   audienceReviewers: "Other reviewers",
@@ -722,7 +755,7 @@ export const caseworkContent: Required<CaseworkContent> = {
     "The review service refused this request. The BReg log names the authority that refused it, the HTTP status and the problem code.",
   handoffRefusedOther:
     "The review service refused this request. An administrator can find out why in the BReg log.",
-  whoDecided: "Show who decided",
+  whoDecided: "Show the reviewer's name",
   accountabilityLine: "{person}, as {profile}: {decision}",
   accountabilityUnavailable:
     "Who decided can only be read by a supervisor of this queue.",
@@ -731,13 +764,14 @@ export const caseworkContent: Required<CaseworkContent> = {
   clocksHeading: "Deadlines",
   clocksEmpty: "No deadlines run on this request.",
   clockName: "Deadline {number}",
+  clockStageName: "{name} ({stage})",
   clockLine: "{name}: {state}",
-  clockLineDue: "{name}: {state} due {time}",
+  clockLineDue: "{name}: {state}, due {time}",
   clockStates: {
-    running: "Running",
-    completed: "Completed",
-    cancelled: "Cancelled",
-    source_facts_missing: "Waiting for source facts",
+    running: "open",
+    completed: "closed",
+    cancelled: "no longer applies",
+    source_facts_missing: "cannot be worked out yet",
   },
   filterApply: "Apply",
   removeFilter: "Remove filter: {label}",
@@ -750,7 +784,7 @@ export const caseworkContent: Required<CaseworkContent> = {
     assign: "Assign item",
     delegate: "Delegate item",
   },
-  assignmentHeading: "Assign this item",
+  assignmentHeading: "Assign to a colleague",
   assignmentDescription:
     "Choose an eligible colleague. The displayed name does not grant authority; Casework checks the selected reference again.",
   assignmentAction: "Assignment action",

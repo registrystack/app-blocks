@@ -1,0 +1,1 @@
+import{t as e}from"./dashboard-records-DshL3Qoa.js";export{e as DashboardRecordsPage};

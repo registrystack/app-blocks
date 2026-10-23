@@ -1113,9 +1113,13 @@ footer {
   .brand {
     font-size: var(--type-md);
   }
+  /* The language choice and the account actions wrap rather than push the
+     page sideways. */
   .account {
     margin-inline-start: auto;
     gap: 0.4rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
   .account div {
     display: none;

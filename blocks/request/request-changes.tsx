@@ -26,13 +26,16 @@ export interface ChangeRow {
  * are muted and can be hidden. The caller decides what a row is and what
  * counts as changed. Children are the caller's own controls for this
  * comparison and share the one action row below the table with the
- * unchanged-rows toggle.
+ * unchanged-rows toggle. `labels` names the table and its two value
+ * columns, where they are not the proposal's current and proposed.
  */
 export function ChangeTable({
   rows,
+  labels,
   children,
 }: {
   rows: ChangeRow[];
+  labels?: { caption: string; current: string; proposed: string };
   children?: ReactNode;
 }) {
   const c = useBlockContent();
@@ -42,18 +45,23 @@ export function ChangeTable({
   const unchangedCount = rows.filter(
     (row) => row.comparison === "unchanged",
   ).length;
+  const { caption, current, proposed } = labels ?? {
+    caption: c.proposedHeading,
+    current: c.currentColumn,
+    proposed: c.proposedColumn,
+  };
   return (
     <div className="change-comparison">
       <table className="change-table" role="table">
-        <caption className="sr-only">{c.proposedHeading}</caption>
+        <caption className="sr-only">{caption}</caption>
         <thead>
           <tr>
             <th scope="col">{c.fieldColumn}</th>
             <th scope="col" id={`${tableId}-current`}>
-              {c.currentColumn}
+              {current}
             </th>
             <th scope="col" id={`${tableId}-proposed`}>
-              {c.proposedColumn}
+              {proposed}
             </th>
           </tr>
         </thead>
@@ -79,14 +87,11 @@ export function ChangeTable({
                     <span className="changed-marker">{c.changedMarker}</span>
                   )}
                 </td>
-                <td data-label={c.currentColumn} headers={`${tableId}-current`}>
-                  <ValueScope label={c.currentColumn}>{row.current}</ValueScope>
+                <td data-label={current} headers={`${tableId}-current`}>
+                  <ValueScope label={current}>{row.current}</ValueScope>
                 </td>
-                <td
-                  data-label={c.proposedColumn}
-                  headers={`${tableId}-proposed`}
-                >
-                  <ValueScope label={c.proposedColumn}>{row.proposed}</ValueScope>
+                <td data-label={proposed} headers={`${tableId}-proposed`}>
+                  <ValueScope label={proposed}>{row.proposed}</ValueScope>
                 </td>
               </tr>
             ))}
@@ -161,13 +166,16 @@ export function writtenFields(
 /**
  * What a target field holds now: the live target record when it was read,
  * else the value the request retained, unless the host marked the target
- * unavailable. Undefined where neither is known.
+ * unavailable. An applied request is compared with what the field held
+ * before it, from the record's history, since the live record already holds
+ * what it wrote. Undefined where none is known.
  */
 export function currentValue(
   targetField: FieldModel,
   target: RecordView | undefined,
   request: RequestView | undefined,
 ): JsonValue | undefined {
+  if (request?.state === "applied") return request.before?.[targetField.id];
   if (target) return target.values[targetField.id];
   return request?.target?.available === false
     ? undefined
@@ -175,7 +183,7 @@ export function currentValue(
 }
 
 /** Exact, order-sensitive equality: a reordered list is a change. */
-function sameValue(current: unknown, proposed: unknown): boolean {
+export function sameValue(current: unknown, proposed: unknown): boolean {
   return JSON.stringify(current) === JSON.stringify(proposed);
 }
 
@@ -183,7 +191,8 @@ function sameValue(current: unknown, proposed: unknown): boolean {
  * The comparison rows for one request, one for each field it writes. Current
  * values come from the live target record, so before-values survive the
  * decision that removes the pending lifecycle action; the values the request
- * retained stand in only while the target is not marked unavailable. A row
+ * retained stand in only while the target is not marked unavailable. An
+ * applied request's come from the record's history (`currentValue`). A row
  * is labelled by its target field unless `labelOf` words it otherwise.
  */
 export function writtenChangeRows(

@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo } from "react";
+import { fillNodes } from "@/blocks/lib/format";
 
 /**
  * The wording an app sets, by area. Each area's hook reads its own entry and
@@ -166,7 +167,6 @@ export interface BlockContent {
   confirmed: string;
   openRequest: string;
   decisionCheckHeading: string;
-  decisionConfirm: string;
   decisionChange: string;
   decisionContinue: string;
   decisionReasonLabel: string;
@@ -200,6 +200,12 @@ export interface BlockContent {
   showUnchanged: string;
   hideUnchanged: string;
   currentUnavailable: string;
+  /** The comparison of an applied request: what the record held before it, and what it wrote. */
+  appliedChangesHeading: string;
+  beforeColumn: string;
+  afterColumn: string;
+  /** Where the record history this session reads does not hold the values before an applied request. */
+  beforeUnavailable: string;
   whyAskedHeading: string;
   /** `whyAskedHeading` on a holder's own request. */
   holderWhyAskedHeading: string;
@@ -360,9 +366,8 @@ export const blockContent: BlockContent = {
   reconcile: "Check current records",
   confirmed: "Confirmed by the registry",
   openRequest: "Open request",
-  decisionCheckHeading: "Check this decision",
-  decisionConfirm: "Confirm decision",
-  decisionChange: "Change decision",
+  decisionCheckHeading: "Check before you continue",
+  decisionChange: "Back to the request",
   decisionContinue: "Continue",
   decisionReasonLabel: "Reason",
   decisionReasonAudience: "The subject reads this.",
@@ -385,8 +390,8 @@ export const blockContent: BlockContent = {
   conflictTakeLatest: "Take the latest",
   conflictKept: "Your entry is kept. Save it again to send it against the latest version.",
   conflictTaken: "The latest values replace your entry. Review them, then save.",
-  decidedTitle: "Decision recorded",
-  decisionAnnounced: "Your decision was recorded.",
+  decidedTitle: "Request updated",
+  decisionAnnounced: "The request was updated.",
   proposedHeading: "What is proposed",
   fieldColumn: "Field",
   currentColumn: "Current",
@@ -396,7 +401,12 @@ export const blockContent: BlockContent = {
   hideUnchanged: "Hide unchanged fields",
   currentUnavailable:
     "The recorded values at the time of this decision are not held with the request.",
-  whyAskedHeading: "Why the subject asked",
+  appliedChangesHeading: "What changed",
+  beforeColumn: "Before",
+  afterColumn: "After",
+  beforeUnavailable:
+    "The values before this change are not in the record history you can read.",
+  whyAskedHeading: "Reason given",
   holderWhyAskedHeading: "Why you asked",
   changeAnswer: "Change {field}",
   prefillVerified: "Verified source answer",
@@ -481,14 +491,27 @@ export function useBlockContent(): BlockContent {
   return useContentArea("block", blockContent);
 }
 
-/** A confirmed write's exact registry reference, kept as secondary support detail. */
+/**
+ * A confirmed write's exact registry reference, kept as secondary support
+ * detail: small and muted, but shown beside its label with what it is for, as
+ * an unconfirmed write's reference is.
+ */
 export function ConfirmedReceipt({ receipt }: { receipt: string }) {
   const c = useBlockContent();
+  const locale = useLocale();
   return (
-    <details className="reference">
-      <summary>{c.receipt}</summary>
+    <div className="reference">
+      <p>
+        {fillNodes(
+          c.labelled,
+          {
+            label: c.receipt,
+            value: <span className="font-mono">{receipt}</span>,
+          },
+          locale,
+        )}
+      </p>
       <p>{c.receiptHelp}</p>
-      <p className="font-mono">{receipt}</p>
-    </details>
+    </div>
   );
 }

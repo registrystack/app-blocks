@@ -1,1 +1,0 @@
-import{t as e}from"./record-list-page-q-l7ER1s.js";export{e as RecordListPage};

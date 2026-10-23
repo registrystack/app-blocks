@@ -1,0 +1,1 @@
+import{gt as e}from"./loading-BuBPbNJj.js";var t=e();function n({label:e,children:n}){return(0,t.jsxs)(`div`,{className:`definition`,children:[(0,t.jsx)(`dt`,{children:e}),(0,t.jsx)(`dd`,{children:n})]})}function r({items:e}){return(0,t.jsx)(`dl`,{className:`facts`,children:e.map(e=>(0,t.jsxs)(n,{label:e.label,children:[e.value,e.note]},e.key))})}export{r as t};

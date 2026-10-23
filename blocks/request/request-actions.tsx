@@ -54,6 +54,7 @@ export function DecisionForm({
   refetch,
   announce,
   choiceLabel,
+  openerLabel = choiceLabel,
   reconcileHref,
   renderError,
   refreshing,
@@ -93,6 +94,12 @@ export function DecisionForm({
   refetch: () => Promise<unknown>;
   announce: (message: string) => void;
   choiceLabel: (action: RecordActionReference) => string;
+  /**
+   * The label of the primary and secondary buttons, which only open the check
+   * step; the check step's confirm button keeps `choiceLabel`, so the two never
+   * read alike. Defaults to `choiceLabel`.
+   */
+  openerLabel?: (action: RecordActionReference) => string;
   reconcileHref: string;
   renderError: (error: Error) => ReactNode;
   /**
@@ -267,7 +274,7 @@ export function DecisionForm({
               onClick={() => void perform()}
               disabled={task.pending || task.unknown || refreshing}
             >
-              {c.decisionConfirm}
+              {choiceLabel(current)}
             </Button>
             <Button
               variant="ghost"
@@ -357,7 +364,7 @@ export function DecisionForm({
               )}
               {primaryAction && (
                 <Button onClick={() => straightToCheck(primaryAction)}>
-                  {choiceLabel(primaryAction)}
+                  {openerLabel(primaryAction)}
                 </Button>
               )}
               {secondaryActions.map((action) => (
@@ -366,7 +373,7 @@ export function DecisionForm({
                   variant="outline"
                   onClick={() => straightToCheck(action)}
                 >
-                  {choiceLabel(action)}
+                  {openerLabel(action)}
                 </Button>
               ))}
             </div>

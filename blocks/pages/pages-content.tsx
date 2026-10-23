@@ -75,6 +75,14 @@ export interface PagesContent {
   recordRequestsEmpty: string;
   /** Opens the ordinary request list when this session cannot filter that request kind by record; `{label}` is its plural label. */
   recordRequestsBrowse: string;
+  /** Beside a request on a record that is approved and offers this session its apply. */
+  recordRequestApply: string;
+  /** The heading over the approved requests this session can apply, on its page of work. */
+  applyWaitingHeading: string;
+  /** Said where more approved requests may wait than that list shows; the queue link follows it. */
+  applyWaitingMore: string;
+  /** The link to a request kind's list filtered to the approved requests. */
+  applyWaitingQueueLink: string;
   /** The back link to a record entity's list; `{label}` is its plural label. */
   backToList: string;
   /** Shown in a related records section with no record and nothing to add. */
@@ -140,6 +148,8 @@ export interface PagesContent {
   /** Names a table's scroll region in the review: the rows as the change would leave them. */
   scopeReviewAfter: string;
   submitNotice: string;
+  /** What the button that leaves a staff member's confirmed save of a request draft says: it opens the draft, where they send it. */
+  continueToSend: string;
   saveDraft: string;
   saveChanges: string;
   checkAnswers: string;
@@ -151,6 +161,7 @@ export interface PagesContent {
   confirmPrefillRequest: string;
 
   // The request detail page: state descriptions, actions and its recovery notices.
+  /** Names a request whose kind the model does not say; a request page is titled by its kind. */
   requestTitle: string;
   reviewQueue: string;
   ownRequests: string;
@@ -172,6 +183,8 @@ export interface PagesContent {
   /** `confirmSubmit` for staff submitting on a requester's behalf. */
   staffConfirmSubmit: string;
   confirmApply: string;
+  /** `confirmApply` where the page can name the fields the proposal changes: `{fields}` is their labels, as a list. */
+  confirmApplyFields: string;
   confirmRevision: string;
   confirmRebase: string;
   confirmCancel: string;
@@ -185,6 +198,8 @@ export interface PagesContent {
   /** Returns a contextual-only request to the record where it started. */
   backToRecord: string;
   viewRecordLink: string;
+  /** The button that opens a record a confirmed write has just written; `{title}` is the record's title. */
+  viewRecordTitled: string;
   requestResultsHeading: string;
   /** Opens a readable record produced by this applied request; `{label}` is its entity label. */
   viewRequestResult: string;
@@ -217,6 +232,8 @@ export interface PagesContent {
   actionLabels: Readonly<Record<string, string>>;
   /** A lifecycle action's label, by action, where neither `actionLabels` nor the action names it. */
   lifecycleActionLabels: Readonly<Record<string, string>>;
+  /** The label of the button that opens a lifecycle action's check step, by action; the check step's confirm button carries the action's own label. */
+  lifecycleOpenerLabels: Readonly<Record<string, string>>;
   /** Shown where a holder's session finds this request unavailable. */
   requestUnavailable: string;
 
@@ -374,6 +391,10 @@ export const pagesContent: PagesContent = {
     "Requests for this record are shown in the registry's default order.",
   recordRequestsEmpty: "There are no requests for this record.",
   recordRequestsBrowse: "Browse {label}",
+  recordRequestApply: "Open this request to apply it.",
+  applyWaitingHeading: "Approved, waiting to be applied",
+  applyWaitingMore: "More approved requests may be waiting.",
+  applyWaitingQueueLink: "See all approved requests",
   backToList: "Back to {label}",
   relatedEmpty: "None recorded.",
   relatedBounds: "Showing the first {count}. More are recorded.",
@@ -424,7 +445,8 @@ export const pagesContent: PagesContent = {
   scopeReviewBefore: "change under review, before",
   scopeReviewAfter: "change under review, after",
   submitNotice:
-    "Submitting sends this proposal for review. It does not change the record.",
+    "Saving keeps a draft that is not sent yet, and the record does not change. After saving, continue from the confirmation to send it for review.",
+  continueToSend: "Continue to send it for review",
   saveDraft: "Save draft",
   saveChanges: "Save draft changes",
   checkAnswers: "Check your answers",
@@ -466,6 +488,8 @@ export const pagesContent: PagesContent = {
     "Send this proposal to a reviewer. It can be edited again only when the workflow permits.",
   confirmApply:
     "Applying this approved proposal changes the values recorded for this record according to the reviewed proposal.",
+  confirmApplyFields:
+    "Applying it changes {fields} on this record to the proposed values.",
   confirmRevision:
     "The owner will need to prepare and resubmit a revised proposal.",
   confirmRebase:
@@ -481,10 +505,11 @@ export const pagesContent: PagesContent = {
   rejectionReason: "Why the reviewer rejected this request",
   backToRecord: "Back to record",
   viewRecordLink: "View record",
+  viewRecordTitled: "View {title}",
   requestResultsHeading: "Result",
   viewRequestResult: "View {label}",
   editDraft: "Edit draft",
-  decideHeading: "Decide",
+  decideHeading: "What you can do",
   holderActionsHeading: "What you can do",
   holderActionsHint: "Choose what to do with your request.",
   decidedBody:
@@ -528,6 +553,13 @@ export const pagesContent: PagesContent = {
     revise: "Revise request",
     rebase: "Review against latest record",
     apply: "Apply approved change",
+  },
+  lifecycleOpenerLabels: {
+    submit: "Check and submit",
+    cancel: "Check and cancel",
+    revise: "Check and revise",
+    rebase: "Check and prepare a new draft",
+    apply: "Check and apply",
   },
   requestUnavailable: "This request is unavailable",
 

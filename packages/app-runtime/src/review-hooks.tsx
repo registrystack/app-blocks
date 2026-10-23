@@ -48,6 +48,8 @@ export function reviewKeys(scope: string, taskId: string): QueryKey[] {
     [scope, "supervisory-reviews"],
     [scope, "own-review-decisions"],
     [scope, "review-history"],
+    // A decision closes the clocks of its stage and may start the next stage's.
+    [scope, "review-clocks"],
     // The decision reaches the request BReg holds through a delivery; a request read
     // held before it is read again rather than shown as still awaiting review.
     [scope, "record"],

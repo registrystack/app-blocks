@@ -216,6 +216,8 @@ export interface FieldModel {
   options?: FieldOption[];
   /** The words shown for the field where a record holds no value. */
   emptyLabel?: string;
+  /** A `group` field's words for the button that adds an item, from the UI model. */
+  addItemLabel?: string;
   reference?: { entity: string };
   /**
    * How an action input is answered, when the UI model says: typed in,
@@ -331,12 +333,23 @@ export interface RequestView {
    * pseudonym, not a name.
    */
   applied?: { at?: string; by?: string };
+  /**
+   * Set when BReg offers this session the apply of the request now. BReg
+   * decides; the browser only reads it to point a person at the request.
+   */
+  applyOffered?: true;
   /** The readable record this request was started from. */
   entry?: { entity: string; id: string; available: boolean };
   /** The record this request changes, and whether this session could read it. */
   target?: { entity: string; id: string; available: boolean };
   /** The target's current values for each field the request writes. */
   previous?: Record<string, JsonValue>;
+  /**
+   * For an applied request, the target's values for each field the request
+   * writes in the revision before the one its application wrote, read from
+   * the target's history. Absent where that history does not hold them.
+   */
+  before?: Record<string, JsonValue>;
   /**
    * The provenance of verified evidence the request holds, for the answer
    * field it was verified for. The retained artifact itself is never served.

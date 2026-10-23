@@ -187,6 +187,7 @@ function StartAction({
       />
       <ActionWriteForm
         action={action}
+        entities={entities}
         fields={fields}
         preset={asked.preset}
         task={task}

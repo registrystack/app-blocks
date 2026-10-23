@@ -1,14 +1,16 @@
 import type {
   EntityModel,
+  FieldModel,
   JsonSchema,
   RegistryModel,
+  ReviewChangedField,
   ReviewJson,
   ReviewTaskDetail,
 } from "@registrystack/app-runtime";
 import {
   bregReviewSubjectSource,
   fieldsFromJsonSchema,
-  reviewChangedRequestValues,
+  reviewChangedFields,
   reviewShownValues,
   reviewSubjectEntity,
   reviewSubjectFromRegister,
@@ -18,9 +20,14 @@ import {
 import { useModel, useRecord } from "@registrystack/app-runtime/react";
 import { FieldValue } from "@/blocks/fields/field-value";
 import { recordTitle } from "@/blocks/fields/reference-value";
+import {
+  ChangeTable,
+  sameValue,
+  type ChangeRow,
+} from "@/blocks/request/request-changes";
 import { Loading, Notice } from "@/blocks/casework/shared";
 import { useCaseworkContent } from "@/blocks/casework/casework-content";
-import { useLocale } from "@/blocks/lib/content";
+import { useBlockContent, useLocale } from "@/blocks/lib/content";
 
 /**
  * What a reviewer sees of a task's subject. A BReg record reads its own live
@@ -28,11 +35,13 @@ import { useLocale } from "@/blocks/lib/content";
  * all, reads the values the requester submitted or the source projected,
  * through the review policy's own display schema. A request of the register
  * reads those values under the model's own labels, option words and item
- * fields, a BReg `changes` field reads as the request fields that write the
- * changed record, and a value that names a register record reads as that
- * record's title (`ReferenceValue`). Given no model, only `BregSubject` calls
- * `useModel`, and only a register subject calls `useRecord`: a host with no
- * BReg never mounts either, so it never needs the model or record routes.
+ * fields, a BReg `changes` field reads as the request fields that write a
+ * record it creates, or a record it patches as it was when the request was
+ * submitted beside as it would be (`ChangeTable`), and a value that names a
+ * register record reads as that record's title (`ReferenceValue`). Given no
+ * model, only `BregSubject` calls `useModel`, and only a register subject
+ * calls `useRecord`: a host with no BReg never mounts either, so it never
+ * needs the model or record routes.
  */
 
 /** The display schema as an object schema, whatever shape a policy served it in. */
@@ -52,46 +61,115 @@ function SchemaSubject({
   model?: RegistryModel;
 }) {
   const c = useCaseworkContent();
+  const block = useBlockContent();
   const shown = { ...reviewShownValues(task.context) };
   // The register's own field, where it has one by the same API name, carries
   // the model's label, option words and item fields; the schema has only names.
-  // A changes field stands for the request's own fields that write it.
+  // A changes field stands for the record fields the request writes.
   // The UI model may choose which of the policy's display projection to show,
   // and in what order; a name outside the projection is never shown.
   const projection = fieldsFromJsonSchema(
     asObjectSchema(task.policy.displaySchema),
   );
   const chosen = model?.casework?.context?.[task.policy.id];
-  const fields = (
+  const parts = (
     chosen
       ? chosen.flatMap((name) => projection.filter((f) => f.apiName === name))
       : projection
-  ).flatMap((field) => {
+  ).flatMap((field): SubjectPart[] => {
     const changed =
       entity && model
-        ? reviewChangedRequestValues(shown[field.apiName], entity, model)
+        ? reviewChangedFields(shown[field.apiName], entity, model)
         : undefined;
     if (entity && changed) {
-      Object.assign(shown, changed);
-      return entity.fields.filter((own) => own.apiName in changed);
+      // A record the request creates reads as the request's own fields; a
+      // record it patches, as it was when submitted beside as it would be.
+      const created = changed.filter((row) => !("before" in row));
+      for (const row of created)
+        shown[row.requestField.apiName] = row.after;
+      const patched = changed.filter((row) => "before" in row);
+      return [
+        ...entity.fields
+          .filter((own) => created.some((row) => row.requestField.id === own.id))
+          .map((own) => ({ field: own })),
+        ...[...new Set(patched.map((row) => row.recordId))].map((recordId) => ({
+          recordId,
+          rows: patched.filter((row) => row.recordId === recordId),
+        })),
+      ];
     }
     return [
-      entity?.fields.find((own) => own.apiName === field.apiName) ?? field,
+      {
+        field:
+          entity?.fields.find((own) => own.apiName === field.apiName) ?? field,
+      },
     ];
   });
-  if (fields.length === 0) return <p className="muted">{c.contextEmpty}</p>;
+  if (parts.length === 0) return <p className="muted">{c.contextEmpty}</p>;
   return (
-    <dl>
-      {fields.map((field) => (
-        <div className="definition" key={field.id}>
-          <dt>{field.label}</dt>
-          <dd>
-            <FieldValue field={field} value={shown[field.apiName]} />
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      {segments(parts).map((segment, index) =>
+        "fields" in segment ? (
+          <dl key={index}>
+            {segment.fields.map((field) => (
+              <div className="definition" key={field.id}>
+                <dt>{field.label}</dt>
+                <dd>
+                  <FieldValue field={field} value={shown[field.apiName]} />
+                </dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          // BReg froze each patched record's values when the request was
+          // submitted: the record as it was then, not as it is now.
+          <ChangeTable
+            key={index}
+            rows={segment.rows.map(changeRow)}
+            labels={{
+              caption: block.proposedHeading,
+              current: block.beforeColumn,
+              proposed: block.proposedColumn,
+            }}
+          />
+        ),
+      )}
+    </>
   );
+}
+
+/** A record the request patches, by the fields it writes there. */
+interface PatchedRecord {
+  recordId: string;
+  rows: ReviewChangedField[];
+}
+
+/** One thing the subject shows: a field, or a record the request patches. */
+type SubjectPart = { field: FieldModel } | PatchedRecord;
+
+/** The parts in order, with each run of fields read as one list. */
+function segments(
+  parts: readonly SubjectPart[],
+): ({ fields: FieldModel[] } | PatchedRecord)[] {
+  const all: ({ fields: FieldModel[] } | PatchedRecord)[] = [];
+  for (const part of parts) {
+    const last = all[all.length - 1];
+    if (!("field" in part)) all.push(part);
+    else if (last && "fields" in last) last.fields.push(part.field);
+    else all.push({ fields: [part.field] });
+  }
+  return all;
+}
+
+/** A patched field as a comparison row, under the record's own label. */
+function changeRow(row: ReviewChangedField): ChangeRow {
+  return {
+    key: `${row.recordId}/${row.targetField.id}`,
+    label: row.targetField.label,
+    current: <FieldValue field={row.targetField} value={row.before} />,
+    proposed: <FieldValue field={row.targetField} value={row.after} />,
+    comparison: sameValue(row.before, row.after) ? "unchanged" : "changed",
+  };
 }
 
 function BregRecordSubject({

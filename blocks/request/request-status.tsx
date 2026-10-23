@@ -30,17 +30,12 @@ export function StateNotice({
 }
 
 /**
- * A decision a reviewer has neither applied nor let expire. The register
- * keeps such a request in its submitted state; its review section carries
- * the approval.
+ * A decision a reviewer has neither applied nor let expire. The host reads
+ * such a request as approved from BReg's own fields, in a list and on the
+ * request page alike.
  */
 export function approvedNotApplied(request: RequestView | undefined): boolean {
-  return (
-    request?.state === "submitted" &&
-    request.review?.result.state === "approved" &&
-    request.review.application.state !== "applied" &&
-    request.review.application.state !== "expired"
-  );
+  return request?.state === "approved";
 }
 
 /**

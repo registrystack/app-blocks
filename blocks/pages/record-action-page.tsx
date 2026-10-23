@@ -108,6 +108,7 @@ function RecordAction({
   actionId: string;
   useTask: () => RecordActionTask;
 }) {
+  const task = useTask();
   return (
     <OfferedStart
       entity={entity.id}
@@ -122,7 +123,7 @@ function RecordAction({
           entities={entities}
           entity={entity}
           action={action}
-          useTask={useTask}
+          task={task}
         />
       )}
     </OfferedStart>
@@ -142,6 +143,7 @@ function RecordScopedAction({
   actionId: string;
   useTask: () => RecordActionTask;
 }) {
+  const task = useTask();
   // The same read as the record page, so the action it offered is the one used.
   const query = useRecord(entity.id, recordId);
   const action = useOpenedAction(
@@ -154,15 +156,18 @@ function RecordScopedAction({
     return (
       <ErrorPanel error={query.error} retry={() => void query.refetch()} />
     );
-  // An action the registry would refuse for this record now is not opened.
-  if (!action || action.availability) return <UnavailableWrite />;
+  // An action the registry would refuse for this record now is not opened,
+  // unless this form already wrote: the reread after a confirmed write can
+  // withdraw the action, and the confirmation must outlive that.
+  if (!action || (action.availability && !task.result))
+    return <UnavailableWrite />;
   return (
     <RecordActionForm
       entities={entities}
       entity={entity}
       action={action}
       record={query.data}
-      useTask={useTask}
+      task={task}
     />
   );
 }
@@ -172,19 +177,18 @@ function RecordActionForm({
   entity,
   action,
   record,
-  useTask,
+  task,
 }: {
   entities: RegisterEntities;
   entity: EntityModel;
   action: RecordActionReference;
   /** The record the action is taken on, when it is one offered on a record. */
   record?: RecordView;
-  useTask: () => RecordActionTask;
+  task: RecordActionTask;
 }) {
   const pages = usePagesContent(),
     locale = useLocale(),
-    appRoutes = useRegisterRoutes(),
-    task = useTask();
+    appRoutes = useRegisterRoutes();
   const routes = entityRoutes(appRoutes, entities, entity.id);
   const fields = (action.fields ?? []).filter((field) => !field.readOnly);
   const asked = useFormRoute(fields);
@@ -229,6 +233,7 @@ function RecordActionForm({
       />
       <ActionWriteForm
         action={action}
+        entities={entities}
         fields={fields}
         preset={preset}
         anchorSources={anchorSources}

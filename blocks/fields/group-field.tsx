@@ -229,7 +229,8 @@ c.groupEntryCount ?? blockContent.groupEntryCount!,
  * A repeatable group's items: one fieldset per item, holding a labelled
  * control per sub-field (the same control a top-level field of that kind
  * uses, scoped to a per-item id so items never collide), a button to remove
- * that item, and a button to add another. The group carries a single error
+ * that item, and a button to add another, in the field's own words where the
+ * UI model gives them. The group carries a single error
  * message at its own fieldset, the way a checkbox group does; a sub-field's
  * own refusal is reported there rather than beside that sub-field, since the
  * host validates a write as a whole and does not say which item failed.
@@ -322,7 +323,7 @@ export function GroupControl({
         </fieldset>
       ))}
       <button type="button" id={addButtonId} onClick={addItem}>
-        {c.addGroupItem ?? blockContent.addGroupItem}
+        {field.addItemLabel ?? c.addGroupItem ?? blockContent.addGroupItem}
       </button>
     </GroupFieldset>
   );

@@ -79,6 +79,8 @@ export interface ReviewPageContent {
   statusHeldElsewhere: string;
   statusDecided: string;
   claim: string;
+  /** Beside the claim button: the decision controls appear only once the task is claimed. */
+  claimHint: string;
   release: string;
   claimUnconfirmed: string;
   releaseUnconfirmed: string;
@@ -110,6 +112,10 @@ export interface ReviewPageContent {
   teamPartial: string;
   /** `{count}`: the reviews on the page. */
   teamCount: string;
+  /** Leads the per-queue links to the reviews still waiting for a decision. */
+  teamWaitingIntro: string;
+  /** `{queue}`, `{count}`: one link, to Your work on that queue. */
+  teamWaitingLine: string;
 
   /** The reviews the officer has decided. */
   decisionsTitle: string;
@@ -146,7 +152,11 @@ export interface ReviewPageContent {
   howStage: string;
   /** "Stage {number}", for a stage with neither a wording nor a queue label. */
   howStageUnnamed: string;
-  /** Names a stage by its id; a stage with no entry is named by its queue label. */
+  /**
+   * Names a stage by its id, on How review works and beside a stage deadline on
+   * the task; a stage with no entry is named by its queue label where the page
+   * knows it (on the task, only the task's own stage).
+   */
   howStageNames: Readonly<Record<string, string>>;
   /** "Queue: {queue}" */
   howQueue: string;
@@ -161,7 +171,11 @@ export interface ReviewPageContent {
   howExcludesEarlier: string;
   howDeadlines: string;
   howDeadlinesNone: string;
-  /** Names a deadline by its id; deadlines with no entry are covered by one sentence, howDeadlineUnnamed. */
+  /**
+   * Names a deadline by its id, on How review works and on the task's
+   * deadlines; on How review works, deadlines with no entry are covered by one
+   * sentence, howDeadlineUnnamed, and on the task each is numbered (`clockName`).
+   */
   howDeadlineNames: Readonly<Record<string, string>>;
   howDeadlineUnnamed: string;
   howOutcomes: string;
@@ -205,13 +219,14 @@ export const reviewPageEnglish: ReviewPageContent = {
   viewRequest: "View the request and its documents",
   documentsHeading: "Documents and evidence",
   documentsHint: "The request page holds what it changes and its supporting documents.",
-  statusOpen: "Open, not claimed",
+  statusOpen: "Waiting to be claimed",
   statusInReview: "In review",
   statusHeldByYou: "Held by you",
   statusHeldBy: "Held by {holder}",
   statusHeldElsewhere: "Held by another officer",
   statusDecided: "Decided",
   claim: "Claim this task",
+  claimHint: "You can record a decision once you have claimed this task.",
   release: "Release this task",
   claimUnconfirmed:
     "The service could not confirm this claim. Retry sends the same claim again.",
@@ -241,6 +256,9 @@ export const reviewPageEnglish: ReviewPageContent = {
     "Too few reviewers are available to give the approvals this review needs.",
   teamPartial: "This page may be missing reviews. Try again shortly.",
   teamCount: "{count, plural, one {# review} other {# reviews}}",
+  teamWaitingIntro:
+    "Waiting for a decision. Each link opens that queue in Your work.",
+  teamWaitingLine: "{queue}: {count, plural, one {# review} other {# reviews}}",
 
   decisionsTitle: "My decisions",
   decisionsDescription:

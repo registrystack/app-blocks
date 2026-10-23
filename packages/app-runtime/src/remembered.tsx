@@ -27,6 +27,26 @@ export function writeTabMemory<T>(key: string, value: T): void {
   tabMemory.set(key, value);
 }
 
+const refusedKeys = new Set<string>();
+
+/** Says once per key that the browser refused its storage. */
+function refused(key: string, error: unknown): void {
+  if (refusedKeys.has(key)) return;
+  refusedKeys.add(key);
+  console.warn(
+    `Browser storage refused "${key}"; it lasts this session only.`,
+    error,
+  );
+}
+
+/**
+ * The browser's storage, or undefined where there is none, as in Node. Read inside a
+ * try: a sandboxed frame throws on reading it.
+ */
+function browserStorage(): Storage | undefined {
+  return typeof localStorage === "undefined" ? undefined : localStorage;
+}
+
 /** The value the browser keeps under a key, or the initial value when storage is refused. */
 export function readBrowserMemory<T>(
   key: string,
@@ -34,8 +54,10 @@ export function readBrowserMemory<T>(
   memory: BrowserMemory<T>,
 ): T {
   try {
-    return memory.decode(localStorage.getItem(key));
-  } catch {
+    const store = browserStorage();
+    return store ? memory.decode(store.getItem(key)) : initial;
+  } catch (error) {
+    refused(key, error);
     return initial;
   }
 }
@@ -46,9 +68,10 @@ export function writeBrowserMemory<T>(
   memory: BrowserMemory<T>,
 ): void {
   try {
-    localStorage.setItem(key, memory.encode(value));
-  } catch {
+    browserStorage()?.setItem(key, memory.encode(value));
+  } catch (error) {
     // The setting then lasts the session only; the switch still works.
+    refused(key, error);
   }
 }
 

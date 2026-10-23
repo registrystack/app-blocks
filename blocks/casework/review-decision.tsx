@@ -12,7 +12,12 @@ import {
   type ReviewSettlement,
   type ReviewTaskDetail,
 } from "@registrystack/app-runtime";
-import { useReviewDraft, useSendBack } from "@registrystack/app-runtime/react";
+import {
+  useReviewDraft,
+  useReviewHistory,
+  useReviewPolicies,
+  useSendBack,
+} from "@registrystack/app-runtime/react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { InputField } from "@/blocks/fields/input-field";
@@ -135,6 +140,88 @@ export function PublicReasonField({
 }
 
 /**
+ * What a confirmed decision led to, read from the decided task's receipt and
+ * the history entries recorded at or after the decision: the review moved on,
+ * settled, or sent the request back. The decide route confirms only the
+ * decision, so a case the reads do not show (an approval that needs more
+ * approvals in its stage, a history page not yet loaded) says nothing.
+ */
+function NextStep({
+  task,
+  stageNames,
+}: {
+  task: ReviewTaskDetail;
+  stageNames: Readonly<Record<string, string>> | undefined;
+}) {
+  const c = useCaseworkContent();
+  const locale = useLocale();
+  const history = useReviewHistory(task.requestId);
+  const policies = useReviewPolicies();
+  const receipt = task.decisionReceipt;
+  if (!receipt) return null;
+  if (receipt.decision === "changes_requested")
+    return <Notice tone="success">{c.sentBack}</Notice>;
+  const decidedAt = Date.parse(receipt.decidedAt);
+  const since = new Set(
+    (history.data ?? [])
+      .filter((entry) => Date.parse(entry.occurredAt) >= decidedAt)
+      .map((entry) => entry.kind),
+  );
+  if (since.has("stage_advanced")) {
+    const next = policies.data?.items.find(
+      (policy) => policy.id === task.policy.id,
+    )?.stages[task.stageIndex + 1];
+    const name =
+      next && (stageNames?.[next.id] ?? (next.queueLabel || undefined));
+    return (
+      <Notice tone="success">
+        {name ? fill(c.nextStage, { stage: name }, locale) : c.nextStageUnnamed}
+      </Notice>
+    );
+  }
+  if (since.has("review_settled")) {
+    if (receipt.decision === "approve")
+      return <Notice tone="success">{c.settledApproved}</Notice>;
+    if (receipt.decision === "reject")
+      return <Notice tone="success">{c.settledRejected}</Notice>;
+  }
+  return null;
+}
+
+/**
+ * Where approving leads, read from the task's review policy: on to the next
+ * stage, or to the end of the review. A stage that needs more than one
+ * approval may stay where it is after this one, so it says nothing there, as
+ * it does while the policy is unread or names another stage at this place.
+ */
+function ApprovalLeadsTo({
+  task,
+  stageNames,
+}: {
+  task: ReviewTaskDetail;
+  stageNames: Readonly<Record<string, string>> | undefined;
+}) {
+  const c = useCaseworkContent();
+  const locale = useLocale();
+  const stages = useReviewPolicies().data?.items.find(
+    (policy) => policy.id === task.policy.id,
+  )?.stages;
+  const stage = stages?.[task.stageIndex];
+  if (!stages || stage?.id !== task.stageId || stage.requiredApprovals > 1)
+    return null;
+  const next = stages[task.stageIndex + 1];
+  if (!next) return <p className="muted">{c.approvesSettles}</p>;
+  const name = stageNames?.[next.id] ?? (next.queueLabel || undefined);
+  return (
+    <p className="muted">
+      {name
+        ? fill(c.approvesToStage, { stage: name }, locale)
+        : c.approvesToStageUnnamed}
+    </p>
+  );
+}
+
+/**
  * A task's decision: the outcome, its reason and result, and the note a
  * send-back or a rejection sends its requester. Fetches its own send-back
  * command from the task id, so the caller supplies only the task and how to
@@ -142,10 +229,13 @@ export function PublicReasonField({
  */
 export function DecisionPanel({
   task,
+  stageNames,
   reread,
   rereading,
 }: {
   task: ReviewTaskDetail;
+  /** Names a stage by its stage id, in the page's wording; a stage with no entry reads as its queue. */
+  stageNames?: Readonly<Record<string, string>>;
   reread: () => void;
   rereading: boolean;
 }) {
@@ -271,6 +361,9 @@ export function DecisionPanel({
       {state.state === "confirmed" && (
         <Notice tone="success">{c.decided}</Notice>
       )}
+      {state.state === "confirmed" && task.decisionReceipt && (
+        <NextStep task={task} stageNames={stageNames} />
+      )}
       {state.state === "refused" && state.refusal.kind !== "validation" && (
         <Notice tone="warning">
           {caseworkRefusalText(c, state.refusal, c.decisionNotApplied)}
@@ -344,6 +437,9 @@ export function DecisionPanel({
                 {fill(c.outcomeBlocked, { outcome: option.label }, locale)}
               </p>
             ))}
+            {choices.some(
+              (option) => option.plan.outcome.settlement === "approved",
+            ) && <ApprovalLeadsTo task={task} stageNames={stageNames} />}
             {plan && !approves && (
               <InputField
                 name="review-reason"

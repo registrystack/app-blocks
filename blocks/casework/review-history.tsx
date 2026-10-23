@@ -142,9 +142,21 @@ export function HistoryPanel({
 /** The service clocks running against a request, and what they answer. */
 export function ClocksPanel({
   requestId,
+  names,
+  stages,
   renderError,
 }: {
   requestId: string;
+  /**
+   * Names a deadline by its clock id, as the review's policy names it; a clock
+   * with no entry is named `clockName`, by its place in the list.
+   */
+  names?: Readonly<Record<string, string>>;
+  /**
+   * Names a stage by its stage id; a stage clock whose stage has an entry is
+   * named `clockStageName`, a clock on the request's subject by its name alone.
+   */
+  stages?: Readonly<Record<string, string>>;
   /** Renders the clocks' own read error in place of the list. */
   renderError: (error: unknown, retry: () => void) => ReactNode;
 }) {
@@ -162,19 +174,27 @@ export function ClocksPanel({
         <p className="muted">{c.clocksEmpty}</p>
       ) : (
         <ul>
-          {clocks.data.map((clock, index) => (
-            <li key={clock.clockOccurrenceId}>
-              {fill(
-                clock.dueAt ? c.clockLineDue : c.clockLine,
-                {
-                  name: fill(c.clockName, { number: String(index + 1) }, locale),
-                  state: c.clockStates[clock.state] ?? clock.state,
-                  time: clock.dueAt ? caseworkDateTime(clock.dueAt, locale) : "",
-                },
-                locale,
-              )}
-            </li>
-          ))}
+          {clocks.data.map((clock, index) => {
+            const name =
+              names?.[clock.clockId] ??
+              fill(c.clockName, { number: String(index + 1) }, locale);
+            const stage = clock.stageId ? stages?.[clock.stageId] : undefined;
+            return (
+              <li key={clock.clockOccurrenceId}>
+                {fill(
+                  clock.dueAt ? c.clockLineDue : c.clockLine,
+                  {
+                    name: stage
+                      ? fill(c.clockStageName, { name, stage }, locale)
+                      : name,
+                    state: c.clockStates[clock.state] ?? clock.state,
+                    time: clock.dueAt ? caseworkDateTime(clock.dueAt, locale) : "",
+                  },
+                  locale,
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

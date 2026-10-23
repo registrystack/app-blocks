@@ -24,6 +24,7 @@ import { BackLink } from "@/blocks/shell/back-link";
 import { Loading } from "@/blocks/shell/loading";
 import { ErrorPanel } from "@/blocks/shell/error-panel";
 import { StatusBadge } from "@/blocks/shell/status-badge";
+import { approvedNotApplied } from "@/blocks/request/request-status";
 import { RecordSections } from "@/blocks/record/record-sections";
 import { RecordTable } from "@/blocks/record/record-table";
 import {
@@ -568,10 +569,9 @@ function HistoryEntry({
 
 /**
  * The record's requests of every request entity that targets it, each linked
- * to its own page and, where several entities do, naming its type. The model
- * decides which request kinds can be listed by target. The others link to
- * their ordinary request list, while an advertised read that fails shows its
- * refusal with a retry.
+ * to its own page and naming its type. The model decides which request kinds
+ * can be listed by target. The others link to their ordinary request list,
+ * while an advertised read that fails shows its refusal with a retry.
  */
 function RecordRequestsBlock({
   entities,
@@ -652,12 +652,12 @@ function RecordRequestsBlock({
                       served={request.request?.stateLabels[state]}
                     />
                   )}
-                  {requests.length > 1 && (
-                    <>
-                      {" "}
-                      <span className="muted">{request.label}</span>
-                    </>
-                  )}
+                  {" "}
+                  <span className="muted">{request.label}</span>
+                  {item.request?.applyOffered &&
+                    approvedNotApplied(item.request) && (
+                      <p className="muted">{pages.recordRequestApply}</p>
+                    )}
                 </li>
               );
             })}

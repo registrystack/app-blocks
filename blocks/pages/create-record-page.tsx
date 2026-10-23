@@ -154,6 +154,7 @@ function CreateRecordForm({
       />
       <ActionWriteForm
         action={action}
+        entities={entities}
         fields={fields}
         preset={preset}
         task={task}

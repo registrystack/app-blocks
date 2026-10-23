@@ -261,6 +261,8 @@ export interface RequesterReviewNotes {
 export interface ReviewClock {
   clockOccurrenceId: string;
   clockId: string;
+  /** The stage a stage clock runs for; a clock on the request's subject has none. */
+  stageId?: string;
   state: "running" | "completed" | "cancelled" | "source_facts_missing";
   anchorAt: string;
   dueAt?: string;

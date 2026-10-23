@@ -144,6 +144,9 @@ export const serviceRoutes: AppRoute[] = [
   route("change-record", registerPath("changeRecord"), (m, c) => (
     <ChangeRequestFormPage recordId={m.id} useTask={c.useChangeTask} />
   )),
+  route("create-request", registerPath("createRequest"), (_, c) => (
+    <ChangeRequestFormPage useTask={c.useChangeTask} />
+  )),
   route("record", registerPath("record"), (m) => <RecordDetailPage id={m.id} />),
   route("requests", registerPath("requests"), () => <RequestQueuePage />),
   route("edit-request", registerPath("editRequest"), (m, c) => (

@@ -20,7 +20,9 @@ import {
   useModel,
   useNextReviewTask,
   usePendingCommands,
+  useRecordsOf,
   useRereadOnRefusal,
+  useReviewPolicies,
   useReviewQueue,
   useReviewTask,
   useReviewTaskHold,
@@ -62,6 +64,15 @@ import { Notice } from "@/blocks/lib/notice";
 import { fill } from "@/blocks/lib/format";
 import { useBlockContent, useLocale } from "@/blocks/lib/content";
 import { usePagesContent } from "@/blocks/pages/pages-content";
+import {
+  listableRequests,
+  recordPath,
+  recordTitle,
+  requestRoute,
+  useRegister,
+  type RegisterEntities,
+} from "@/blocks/pages/record";
+import { useRegisterRoutes } from "@/blocks/pages/register-routes";
 import {
   tabCursors,
   useTabCursors,
@@ -593,6 +604,94 @@ function QueueList({ view: asked }: { view: ReviewsView }) {
   );
 }
 
+/** A request kind's list, filtered to the approved requests. */
+function approvedQueue(
+  entities: RegisterEntities,
+  path: string,
+  request: string,
+): string {
+  const split = splitRoute(requestRoute(entities, path, request));
+  split.query.set("state", "approved");
+  return `${split.path}?${split.query.toString()}`;
+}
+
+/**
+ * The approved requests waiting to be applied that BReg offers this session
+ * the apply of. BReg offers the apply request by request, so nothing here
+ * guesses from a profile: a session offered the apply of none sees no
+ * section. A page can be short and still have a next, so a partial list says
+ * so and points to the request queue.
+ */
+function ApprovedToApply() {
+  const pages = usePagesContent();
+  const locale = useLocale();
+  const routes = useRegisterRoutes();
+  const { entities } = useRegister();
+  const readable = entities
+    ? listableRequests(entities).filter((request) =>
+        request.request?.filterableStates.includes("approved"),
+      )
+    : [];
+  const reads = useRecordsOf(
+    readable.map((request) => request.id),
+    { state: "approved" },
+  ).map((query, index) => ({ request: readable[index]!, query }));
+  if (!entities) return null;
+  const failed = reads.filter(({ query }) => query.error);
+  const items = reads.flatMap(({ request, query }) =>
+    (query.data?.items ?? [])
+      .filter((item) => item.request?.applyOffered)
+      .map((item) => ({ request, item })),
+  );
+  const partial = reads.find(({ query }) => query.data?.nextCursor);
+  if (items.length === 0 && failed.length === 0) return null;
+  return (
+    <section className="card section-card">
+      <h2>{pages.applyWaitingHeading}</h2>
+      <div className="section-card-body">
+        {items.length > 0 && (
+          <ul className="value-list">
+            {items.map(({ request, item }) => {
+              const path = recordPath(routes, entities, request.id, item.id);
+              const title =
+                recordTitle(request, item, locale) ?? pages.unnamedRequest;
+              return (
+                <li key={`${request.id}:${item.id}`}>
+                  {path ? (
+                    <a className="record-link" href={`#${path}`}>
+                      {title}
+                    </a>
+                  ) : (
+                    title
+                  )}{" "}
+                  <span className="muted">{request.label}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {items.length > 0 && partial && (
+          <p className="muted">
+            {pages.applyWaitingMore}{" "}
+            <a
+              href={`#${approvedQueue(entities, routes.requests, partial.request.id)}`}
+            >
+              {pages.applyWaitingQueueLink}
+            </a>
+          </p>
+        )}
+        {failed.map(({ request, query }) => (
+          <ErrorPanel
+            key={request.id}
+            error={query.error}
+            retry={() => void query.refetch()}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /**
  * The officer's review tasks: the queue this Casework profile can see, which
  * the owner filter narrows to the officer's own, with Take next above it.
@@ -609,6 +708,7 @@ export function CaseworkReviewsPage() {
       />
       {/* A queue of its own starts its own cursor stack. */}
       <QueueList key={`${view.owner ?? ""}/${view.queue ?? ""}`} view={view} />
+      <ApprovedToApply />
     </WhenProfile>
   );
 }
@@ -687,6 +787,9 @@ function ReviewTaskRead({
   const r = useReviewPageContent();
   const locale = useLocale();
   const subject = useSubjectReference(current, model);
+  const policy = useReviewPolicies().data?.items.find(
+    (item) => item.id === current.policy.id,
+  );
   if (subject.loading) return <Loading />;
   return (
     <div className="flex flex-col gap-6 [&_.review-hold]:flex [&_.review-hold]:flex-wrap [&_.review-hold]:items-center [&_.review-hold]:gap-3">
@@ -717,7 +820,12 @@ function ReviewTaskRead({
       />
       <Context task={current} model={model} />
       <RequestLink task={current} />
-      <DecisionPanel task={current} reread={reread} rereading={rereading} />
+      <DecisionPanel
+        task={current}
+        stageNames={r.howStageNames}
+        reread={reread}
+        rereading={rereading}
+      />
       {current.heldByYou && current.status === "held" && (
         <DraftPanel
           task={current}
@@ -736,6 +844,20 @@ function ReviewTaskRead({
       />
       <ClocksPanel
         requestId={current.requestId}
+        names={r.howDeadlineNames}
+        // This task's own stage reads as its queue unless the page names it;
+        // another stage of its policy reads as that stage's queue.
+        stages={{
+          ...Object.fromEntries(
+            (policy?.stages ?? [])
+              .filter((stage) => stage.queueLabel)
+              .map((stage) => [stage.id, stage.queueLabel]),
+          ),
+          ...(current.queueLabel
+            ? { [current.stageId]: current.queueLabel }
+            : {}),
+          ...r.howStageNames,
+        }}
         renderError={(error, retry) => (
           <ErrorPanel error={error} retry={retry} />
         )}
@@ -793,6 +915,7 @@ function Hold({
   return (
     <section className="review-hold" aria-label={statusLine(r, task, locale)}>
       {holder && <p>{holder}</p>}
+      {canClaim && <p>{r.claimHint}</p>}
       {canClaim && (
         <Button
           disabled={rereading}

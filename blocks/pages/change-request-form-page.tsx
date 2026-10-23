@@ -40,6 +40,7 @@ import { navigate, splitRoute, useRoute } from "@/blocks/shell/routing";
 import { createWords, usePagesContent } from "@/blocks/pages/pages-content";
 import { documentsRoute, reviewRoute } from "@/blocks/pages/holder-step-routes";
 import { useRegisterRoutes } from "@/blocks/pages/register-routes";
+import { backPathOf } from "@/blocks/pages/record-route-query";
 import { startsPath } from "@/blocks/pages/start-places";
 import {
   useFormAnswers,
@@ -320,6 +321,7 @@ function RequestForm({
     block = useBlockContent(),
     locale = useLocale(),
     routes = useRegisterRoutes(),
+    route = useRoute(),
     session = useAuthority(),
     task = useTask();
   const fields = (action.fields ?? []).filter((field) => !field.readOnly);
@@ -468,12 +470,19 @@ function RequestForm({
   // has no recorded values to show or compare against, and the host serves
   // no verified prefill for a start.
   const started = !draft && !target;
+  // The form leads back to the page its route says it was opened from, else
+  // to the record it changes, and a start to the start place, which only the
+  // staff app has; a holder's app goes home.
   const back =
+    backPathOf(splitRoute(route).query) ??
     (draft
       ? recordPath(routes, entities, draft.entity, draft.id)
       : target
         ? recordPath(routes, entities, target.entity, target.id)
-        : startsPath) ?? "/";
+        : session.holder
+          ? "/"
+          : startsPath) ??
+    "/";
   const problems = task.fieldErrors;
   function input(field: FieldModel) {
     return (
@@ -712,7 +721,7 @@ function RequestForm({
               task={task}
               reconcileHref={`#${requestRoute(entities, routes.requests, request.id)}`}
               confirmedLabel={
-                session.holder ? pages.continueAfterWrite : undefined
+                session.holder ? pages.continueAfterWrite : pages.continueToSend
               }
               onConfirmed={(id) => {
                 const path = session.holder

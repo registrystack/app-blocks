@@ -6,7 +6,7 @@
  * the records the request would change. A subject another producer submitted is not the
  * register's, and none of this applies to it.
  */
-import type { EntityModel, RegistryModel } from "./model.js";
+import type { EntityModel, FieldModel, RegistryModel } from "./model.js";
 import type {
   ReviewContext,
   ReviewJson,
@@ -67,18 +67,75 @@ function isObject(
 /**
  * One record a BReg `changes` context field shows: its id, whether the
  * request creates or patches it, and its projected fields, by the record's
- * field ids (BReg keys them so, not by API name), as they are (`before`, null
- * for a record the request creates) and as they would be (`after`).
+ * field ids (BReg keys them so, not by API name), as they were when the
+ * request was submitted (`before`, which BReg freezes then; null for a record
+ * the request creates) and as they would be (`after`).
  */
-function isChange(
-  value: ReviewJson,
-): value is { recordId: string; operation: string; after: { [key: string]: ReviewJson } } {
+function isChange(value: ReviewJson): value is {
+  recordId: string;
+  operation: string;
+  before?: ReviewJson;
+  after: { [key: string]: ReviewJson };
+} {
   return (
     isObject(value) &&
     typeof value.recordId === "string" &&
     typeof value.operation === "string" &&
     isObject(value.after)
   );
+}
+
+/**
+ * One field a request writes on a record a BReg `changes` field shows: the
+ * request field, the record field it lands in, what the record held there
+ * when the request was submitted (`before`, null where it held nothing) and
+ * what it would hold (`after`).
+ * A record the request creates has no `before`.
+ */
+export interface ReviewChangedField {
+  recordId: string;
+  requestField: FieldModel;
+  targetField: FieldModel;
+  before?: ReviewJson;
+  after: ReviewJson;
+}
+
+/**
+ * A BReg `changes` context field read as the record fields the request
+ * writes, record by record in the order BReg shows them, and within a record
+ * in the order the request names its writes. Undefined when the value is not
+ * a changes field, or shows no field the request writes.
+ */
+export function reviewChangedFields(
+  value: ReviewJson | undefined,
+  entity: EntityModel,
+  model: RegistryModel,
+): ReviewChangedField[] | undefined {
+  if (!Array.isArray(value) || value.length === 0 || !value.every(isChange))
+    return undefined;
+  const written = (entity.request?.writes ?? []).flatMap((write) => {
+    const requestField = entity.fields.find(
+      (field) => field.id === write.requestField,
+    );
+    const targetField = model.entities
+      .find((target) => target.id === write.targetEntity)
+      ?.fields.find((field) => field.id === write.targetField);
+    return requestField && targetField ? [{ requestField, targetField }] : [];
+  });
+  const changed = value.flatMap((change) =>
+    written
+      .filter(({ targetField }) => targetField.id in change.after)
+      .map(({ requestField, targetField }) => ({
+        recordId: change.recordId,
+        requestField,
+        targetField,
+        ...(isObject(change.before)
+          ? { before: change.before[targetField.id] ?? null }
+          : {}),
+        after: change.after[targetField.id]!,
+      })),
+  );
+  return changed.length > 0 ? changed : undefined;
 }
 
 /**
@@ -92,20 +149,12 @@ export function reviewChangedRequestValues(
   entity: EntityModel,
   model: RegistryModel,
 ): Record<string, ReviewJson> | undefined {
-  if (!Array.isArray(value) || value.length === 0 || !value.every(isChange))
-    return undefined;
-  const shown: Record<string, ReviewJson> = {};
-  for (const write of entity.request?.writes ?? []) {
-    const own = entity.fields.find((field) => field.id === write.requestField);
-    const written = model.entities
-      .find((target) => target.id === write.targetEntity)
-      ?.fields.find((field) => field.id === write.targetField);
-    if (!own || !written) continue;
-    for (const change of value)
-      if (written.id in change.after)
-        shown[own.apiName] = change.after[written.id]!;
-  }
-  return Object.keys(shown).length > 0 ? shown : undefined;
+  const changed = reviewChangedFields(value, entity, model);
+  return changed
+    ? Object.fromEntries(
+        changed.map((field) => [field.requestField.apiName, field.after]),
+      )
+    : undefined;
 }
 
 /** The value the task shows for one of the entity's fields, by the field's id. */
